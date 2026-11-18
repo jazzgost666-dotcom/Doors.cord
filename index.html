@@ -1,1 +1,2754 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInAnonymously,
+  signInWithCustomToken,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged
+} from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  serverTimestamp,
+  arrayUnion
+} from 'firebase/firestore';
+import {
+  Hash,
+  Volume2,
+  Plus,
+  Settings,
+  Mic,
+  MicOff,
+  Headphones,
+  HeadphoneOff,
+  Send,
+  Edit3,
+  Trash2,
+  Check,
+  X,
+  Users,
+  Video,
+  VideoOff,
+  Monitor,
+  PhoneOff,
+  PhoneCall,
+  UserPlus,
+  Copy,
+  MessageSquare,
+  Menu,
+  AtSign,
+  Link2,
+  Image as ImageIcon,
+  ShieldCheck,
+  AlertCircle,
+  UserCheck,
+  UserX,
+  User,
+  ThumbsUp,
+  Heart,
+  Flame,
+  Star,
+  Award,
+  Upload,
+  DoorOpen,
+  ChevronDown,
+  Radio,
+  Search
+} from 'lucide-react';
 
+// ============================================================================
+// CONFIGURAÇÃO DO FIREBASE
+// ============================================================================
+const firebaseConfig = typeof __firebase_config !== 'undefined'
+  ? JSON.parse(__firebase_config)
+  : {
+      apiKey: "demo-key",
+      authDomain: "demo.firebaseapp.com",
+      projectId: "demo-project",
+      storageBucket: "demo.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef"
+    };
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'doorscord-realtime-br';
+
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
+
+// ============================================================================
+// CONSTANTES VISUAIS CLÁSSICAS DO DISCORD (ZERO EMOJIS - APENAS VETORES SVG)
+// ============================================================================
+const STATUS_CONFIG = {
+  online: { label: 'Disponível', dotColor: 'bg-[#23A55A]', desc: 'Pronto para conversar e entrar em chamadas' },
+  idle: { label: 'Ausente', dotColor: 'bg-[#F0B232]', desc: 'Afastado do computador no momento' },
+  dnd: { label: 'Não Perturbe', dotColor: 'bg-[#F23F43]', desc: 'Silenciar notificações na tela' },
+  offline: { label: 'Invisível', dotColor: 'bg-[#80848E]', desc: 'Aparecerá desconectado para outros usuários' }
+};
+
+const AVATAR_COLORS = [
+  'bg-[#5865F2]',
+  'bg-[#23A55A]',
+  'bg-[#F0B232]',
+  'bg-[#F23F43]',
+  'bg-[#EB459E]',
+  'bg-[#00A8FC]'
+];
+
+const BANNER_COLORS = [
+  'bg-[#5865F2]',
+  'bg-[#1E1F22]',
+  'bg-[#23A55A]',
+  'bg-[#EB459E]',
+  'bg-[#9B59B6]'
+];
+
+// Reações estritamente em ícones vetoriais Lucide (nenhum emoji)
+const VECTOR_REACTIONS = [
+  { id: 'like', label: 'Curtir', Icon: ThumbsUp, color: 'text-[#5865F2]' },
+  { id: 'heart', label: 'Amei', Icon: Heart, color: 'text-[#F23F43]' },
+  { id: 'check', label: 'Confirmado', Icon: Check, color: 'text-[#23A55A]' },
+  { id: 'flame', label: 'Destaque', Icon: Flame, color: 'text-[#F0B232]' },
+  { id: 'star', label: 'Favorito', Icon: Star, color: 'text-[#FEE75C]' },
+  { id: 'award', label: 'Excelente', Icon: Award, color: 'text-[#EB459E]' }
+];
+
+// ============================================================================
+// UTILITÁRIOS DE IMAGEM DO COMPUTADOR (CANVAS COMPRESSION) & FORMATAÇÃO
+// ============================================================================
+const compressImageFromPC = (file, maxDimension = 256, quality = 0.82) => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      reject(new Error('Selecione um arquivo de imagem válido do computador.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Falha ao processar a imagem selecionada.'));
+      img.src = event.target.result;
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo do computador.'));
+    reader.readAsDataURL(file);
+  });
+};
+
+const formatTimestamp = (ts) => {
+  if (!ts) return 'Agora';
+  const date = ts.toDate ? ts.toDate() : new Date(ts);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return isToday ? `Hoje às ${time}` : `${date.toLocaleDateString('pt-BR')} às ${time}`;
+};
+
+const generateTag = (seed) => {
+  if (!seed) return '1001';
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return String((Math.abs(hash) % 8999) + 1000);
+};
+
+const generateInviteCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = 'DC-';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+const getDmRoomId = (uid1, uid2) => [uid1, uid2].sort().join('_');
+
+// ============================================================================
+// COMPONENTE DE AVATAR PADRONIZADO (FOTO DO PC OU SILHUETA VETORIAL SVG)
+// ============================================================================
+function UserAvatar({ profile, size = 'md', showStatus = false, speaking = false }) {
+  const sizeClasses = {
+    xs: 'w-6 h-6',
+    sm: 'w-8 h-8',
+    md: 'w-10 h-10',
+    lg: 'w-16 h-16',
+    xl: 'w-20 h-20'
+  };
+
+  const iconSizes = {
+    xs: 'w-3.5 h-3.5',
+    sm: 'w-4 h-4',
+    md: 'w-5 h-5',
+    lg: 'w-8 h-8',
+    xl: 'w-10 h-10'
+  };
+
+  const statusDot = STATUS_CONFIG[profile?.status || 'online']?.dotColor || 'bg-[#23A55A]';
+
+  return (
+    <div className="relative inline-flex shrink-0">
+      <div
+        className={`${sizeClasses[size]} rounded-full ${
+          profile?.avatarColor || 'bg-[#5865F2]'
+        } flex items-center justify-center text-white overflow-hidden transition-all ${
+          speaking ? 'ring-2 ring-[#23A55A] ring-offset-2 ring-offset-[#232428]' : ''
+        }`}
+      >
+        {profile?.avatarDataUrl ? (
+          <img
+            src={profile.avatarDataUrl}
+            alt={profile.displayName || 'Avatar'}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <User className={iconSizes[size]} />
+        )}
+      </div>
+
+      {showStatus && (
+        <span
+          className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#2B2D31] ${statusDot}`}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// COMPONENTE DE PARTICIPANTE REMOTO WEBRTC (ÁUDIO, CÂMERA E TELA REAL)
+// ============================================================================
+function RemotePeerCard({ peerData, stream, isDeafened }) {
+  const mediaRef = useRef(null);
+
+  useEffect(() => {
+    if (mediaRef.current && stream) {
+      mediaRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  useEffect(() => {
+    if (mediaRef.current) {
+      mediaRef.current.muted = isDeafened;
+    }
+  }, [isDeafened]);
+
+  const hasVideo = stream && stream.getVideoTracks().some(t => t.enabled && t.readyState === 'live');
+
+  return (
+    <div className="relative aspect-video bg-[#1E1F22] border border-[#3F4147] rounded-lg overflow-hidden flex flex-col items-center justify-center">
+      <video
+        ref={mediaRef}
+        autoPlay
+        playsInline
+        className={`w-full h-full object-cover ${hasVideo ? 'block' : 'hidden'}`}
+      />
+      {!hasVideo && (
+        <div className="flex flex-col items-center justify-center p-4">
+          <UserAvatar profile={peerData} size="lg" />
+          <span className="mt-2.5 text-xs text-[#23A55A] flex items-center gap-1.5 font-medium">
+            <Radio className="w-3.5 h-3.5 animate-pulse" /> Conectado por voz
+          </span>
+        </div>
+      )}
+
+      <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+        <span className="bg-[#111214]/85 px-2.5 py-1 rounded text-xs font-semibold text-white">
+          {peerData?.displayName || 'Usuário'}
+        </span>
+        {peerData?.isScreenSharing && (
+          <span className="bg-[#F23F43] text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+            Ao Vivo
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// APLICAÇÃO PRINCIPAL: DOORS.CORD
+// ============================================================================
+export default function App() {
+  // Autenticação e Usuário Atual
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState(null);
+
+  // Coleções Reais do Firestore
+  const [allUsers, setAllUsers] = useState([]);
+  const [friendRequests, setFriendRequests] = useState([]);
+  const [servers, setServers] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [messages, setMessages] = useState([]);
+
+  // Navegação Clássica do Discord
+  const [viewMode, setViewMode] = useState('home'); // 'home' | 'server'
+  const [homeTab, setHomeTab] = useState('online'); // 'online' | 'all' | 'pending' | 'add' | 'dm'
+  const [activeFriendUid, setActiveFriendUid] = useState(null);
+  const [activeServerId, setActiveServerId] = useState(null);
+  const [activeChannelId, setActiveChannelId] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showMembersSidebar, setShowMembersSidebar] = useState(true);
+
+  // Inputs de Mensagem & Upload de Imagem do PC
+  const [messageInput, setMessageInput] = useState('');
+  const [attachedImageDataUrl, setAttachedImageDataUrl] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+  const [reactionPickerMsgId, setReactionPickerMsgId] = useState(null);
+  const chatFileInputRef = useRef(null);
+  const chatEndRef = useRef(null);
+
+  // Adicionar Amigo Real
+  const [friendQuery, setFriendQuery] = useState('');
+  const [friendFeedback, setFriendFeedback] = useState(null);
+
+  // Modais
+  const [showServerModal, setShowServerModal] = useState(false);
+  const [serverModalTab, setServerModalTab] = useState('create');
+  const [newServerName, setNewServerName] = useState('');
+  const [joinInviteCode, setJoinInviteCode] = useState('');
+
+  const [showChannelModal, setShowChannelModal] = useState(false);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelType, setNewChannelType] = useState('text');
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountIsSignUp, setAccountIsSignUp] = useState(true);
+
+  // Campos de Edição de Perfil + Foto do Computador
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editAvatarDataUrl, setEditAvatarDataUrl] = useState('');
+  const [editAvatarColor, setEditAvatarColor] = useState(AVATAR_COLORS[0]);
+  const [editBannerColor, setEditBannerColor] = useState(BANNER_COLORS[0]);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarFileInputRef = useRef(null);
+
+  // ==========================================================================
+  // WEBRTC REAL (VOZ, CÂMERA E COMPARTILHAMENTO DE TELA)
+  // ==========================================================================
+  const [activeCallRoomId, setActiveCallRoomId] = useState(null);
+  const [activeCallTitle, setActiveCallTitle] = useState('');
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [isCamEnabled, setIsCamEnabled] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [mediaError, setMediaError] = useState(null);
+  const [remotePeers, setRemotePeers] = useState({});
+
+  const localStreamRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const peerConnectionsRef = useRef({});
+  const audioContextRef = useRef(null);
+  const analyserTimerRef = useRef(null);
+
+  // Notificação discreta
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, isError = false) => {
+    setToast({ msg, isError });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // ==========================================================================
+  // 1. AUTENTICAÇÃO FIREBASE
+  // ==========================================================================
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error('Erro de autenticação:', err);
+      }
+    };
+    initAuth();
+
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  // ==========================================================================
+  // 2. DOCUMENTO DO USUÁRIO REAL NO FIRESTORE
+  // ==========================================================================
+  useEffect(() => {
+    if (!user) return;
+
+    const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid);
+    const unsubProfile = onSnapshot(
+      userDocRef,
+      async (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setUserProfile(data);
+          setEditDisplayName(data.displayName || '');
+          setEditUsername(data.username || '');
+          setEditBio(data.bio || '');
+          setEditAvatarDataUrl(data.avatarDataUrl || '');
+          setEditAvatarColor(data.avatarColor || AVATAR_COLORS[0]);
+          setEditBannerColor(data.bannerColor || BANNER_COLORS[0]);
+        } else {
+          const baseName = (user.email ? user.email.split('@')[0] : `usuario_${user.uid.slice(0, 5)}`)
+            .replace(/[^a-zA-Z0-9_]/g, '')
+            .toLowerCase();
+          const tag = generateTag(user.uid);
+          const initialProfile = {
+            uid: user.uid,
+            displayName: user.email ? user.email.split('@')[0] : `Usuário ${tag}`,
+            username: baseName,
+            tag,
+            fullHandle: `${baseName}#${tag}`,
+            bio: '',
+            avatarDataUrl: '',
+            avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+            bannerColor: BANNER_COLORS[0],
+            status: 'online',
+            friends: [],
+            lastSeen: Date.now(),
+            createdAt: Date.now()
+          };
+          await setDoc(userDocRef, initialProfile);
+          setUserProfile(initialProfile);
+        }
+      },
+      (err) => console.error('Erro ao sincronizar perfil:', err)
+    );
+
+    // Heartbeat de presença real
+    const presenceInterval = setInterval(() => {
+      updateDoc(userDocRef, { lastSeen: Date.now() }).catch(() => {});
+    }, 30000);
+
+    return () => {
+      unsubProfile();
+      clearInterval(presenceInterval);
+    };
+  }, [user]);
+
+  // ==========================================================================
+  // 3. LISTENERS EM TEMPO REAL (USUÁRIOS, AMIZADES, SERVIDORES E CANAIS)
+  // ==========================================================================
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubUsers = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'users'),
+      (snap) => setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (err) => console.error('Erro usuários:', err)
+    );
+
+    const unsubReqs = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'friend_requests'),
+      (snap) => setFriendRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (err) => console.error('Erro solicitações:', err)
+    );
+
+    const unsubServers = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'servers'),
+      (snap) => {
+        const myServers = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(s => Array.isArray(s.members) && s.members.includes(user.uid))
+          .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        setServers(myServers);
+      },
+      (err) => console.error('Erro servidores:', err)
+    );
+
+    const unsubChannels = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'channels'),
+      (snap) => {
+        const list = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        setChannels(list);
+      },
+      (err) => console.error('Erro canais:', err)
+    );
+
+    return () => {
+      unsubUsers();
+      unsubReqs();
+      unsubServers();
+      unsubChannels();
+    };
+  }, [user]);
+
+  // ==========================================================================
+  // 4. LISTENER DE MENSAGENS REAIS (CANAL DO SERVIDOR OU DM 1-A-1)
+  // ==========================================================================
+  const currentRoomId = useMemo(() => {
+    if (viewMode === 'home' && homeTab === 'dm' && user && activeFriendUid) {
+      return `dm_${getDmRoomId(user.uid, activeFriendUid)}`;
+    }
+    if (viewMode === 'server' && activeChannelId) {
+      return `ch_${activeChannelId}`;
+    }
+    return null;
+  }, [viewMode, homeTab, user, activeFriendUid, activeChannelId]);
+
+  useEffect(() => {
+    if (!user || !currentRoomId) {
+      setMessages([]);
+      return;
+    }
+
+    const unsubMsgs = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'messages'),
+      (snap) => {
+        const roomMsgs = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(m => m.roomId === currentRoomId)
+          .sort((a, b) => {
+            const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.clientTimestamp || 0);
+            const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.clientTimestamp || 0);
+            return tA - tB;
+          });
+        setMessages(roomMsgs);
+      },
+      (err) => console.error('Erro mensagens:', err)
+    );
+
+    return () => unsubMsgs();
+  }, [user, currentRoomId]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, currentRoomId]);
+
+  // ==========================================================================
+  // 5. WEBRTC REAL: MICROFONE, CÂMERA, COMPARTILHAMENTO DE TELA E SINALIZAÇÃO
+  // ==========================================================================
+  const stopLocalMediaAndPeers = async () => {
+    if (analyserTimerRef.current) {
+      clearInterval(analyserTimerRef.current);
+      analyserTimerRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try { await audioContextRef.current.close(); } catch (e) {}
+      audioContextRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    Object.values(peerConnectionsRef.current).forEach(pc => {
+      try { pc.close(); } catch (e) {}
+    });
+    peerConnectionsRef.current = {};
+    setRemotePeers({});
+    setMicLevel(0);
+    setIsCamEnabled(false);
+    setIsScreenSharing(false);
+  };
+
+  const initVoiceActivityDetection = (stream) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const buffer = new Uint8Array(analyser.frequencyBinCount);
+
+      analyserTimerRef.current = setInterval(() => {
+        if (!localStreamRef.current) return;
+        const track = localStreamRef.current.getAudioTracks()[0];
+        if (!track || !track.enabled) {
+          setMicLevel(0);
+          return;
+        }
+        analyser.getByteFrequencyData(buffer);
+        const avg = buffer.reduce((acc, v) => acc + v, 0) / buffer.length;
+        setMicLevel(Math.min(100, Math.round(avg * 1.8)));
+      }, 100);
+    } catch (e) {}
+  };
+
+  const joinCallRoom = async (roomId, title, withCamera = false) => {
+    if (!user || !userProfile) return;
+    if (activeCallRoomId === roomId) return;
+
+    await stopLocalMediaAndPeers();
+    setMediaError(null);
+    setActiveCallRoomId(roomId);
+    setActiveCallTitle(title);
+
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: withCamera
+      });
+      localStreamRef.current = stream;
+      setIsMicMuted(false);
+      setIsCamEnabled(withCamera);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      initVoiceActivityDetection(stream);
+    } catch (err) {
+      setMediaError('Permissão de microfone/câmera negada pelo navegador. Você ainda pode ouvir outros participantes.');
+      stream = new MediaStream();
+      localStreamRef.current = stream;
+    }
+
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${roomId}_${user.uid}`), {
+      roomId,
+      uid: user.uid,
+      displayName: userProfile.displayName,
+      avatarDataUrl: userProfile.avatarDataUrl || '',
+      avatarColor: userProfile.avatarColor || AVATAR_COLORS[0],
+      isScreenSharing: false,
+      joinedAt: Date.now()
+    });
+
+    showToast(`Conectado à chamada: ${title}`);
+  };
+
+  const leaveCallRoom = async () => {
+    const prevRoom = activeCallRoomId;
+    setActiveCallRoomId(null);
+    setActiveCallTitle('');
+    await stopLocalMediaAndPeers();
+
+    if (user && prevRoom) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${prevRoom}_${user.uid}`));
+      } catch (e) {}
+    }
+    showToast('Desconectado da chamada');
+  };
+
+  useEffect(() => {
+    if (!user || !activeCallRoomId) return;
+
+    const getOrCreatePeerConnection = (remoteUid, remoteProfile) => {
+      if (peerConnectionsRef.current[remoteUid]) {
+        return peerConnectionsRef.current[remoteUid];
+      }
+
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      peerConnectionsRef.current[remoteUid] = pc;
+
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current);
+        });
+      }
+
+      pc.ontrack = (event) => {
+        const [remoteStream] = event.streams;
+        setRemotePeers(prev => ({
+          ...prev,
+          [remoteUid]: { profile: remoteProfile, stream: remoteStream }
+        }));
+      };
+
+      pc.onicecandidate = async (event) => {
+        if (event.candidate) {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
+            roomId: activeCallRoomId,
+            from: user.uid,
+            to: remoteUid,
+            type: 'candidate',
+            candidate: event.candidate.toJSON(),
+            createdAt: Date.now()
+          });
+        }
+      };
+
+      return pc;
+    };
+
+    const unsubPeers = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'call_peers'),
+      async (snap) => {
+        const others = snap.docs
+          .map(d => d.data())
+          .filter(p => p.roomId === activeCallRoomId && p.uid !== user.uid);
+
+        const activeUids = new Set(others.map(o => o.uid));
+        setRemotePeers(prev => {
+          const next = { ...prev };
+          Object.keys(next).forEach(uid => {
+            if (!activeUids.has(uid)) {
+              if (peerConnectionsRef.current[uid]) {
+                peerConnectionsRef.current[uid].close();
+                delete peerConnectionsRef.current[uid];
+              }
+              delete next[uid];
+            } else {
+              const updated = others.find(o => o.uid === uid);
+              if (updated) next[uid].profile = updated;
+            }
+          });
+          return next;
+        });
+
+        for (const other of others) {
+          if (!peerConnectionsRef.current[other.uid]) {
+            const pc = getOrCreatePeerConnection(other.uid, other);
+            setRemotePeers(prev => ({
+              ...prev,
+              [other.uid]: { profile: other, stream: prev[other.uid]?.stream || null }
+            }));
+
+            if (user.uid < other.uid) {
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
+                roomId: activeCallRoomId,
+                from: user.uid,
+                to: other.uid,
+                type: 'offer',
+                sdp: { type: offer.type, sdp: offer.sdp },
+                createdAt: Date.now()
+              });
+            }
+          }
+        }
+      }
+    );
+
+    const seenSignals = new Set();
+    const unsubSignals = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'),
+      async (snap) => {
+        for (const change of snap.docChanges()) {
+          if (change.type !== 'added') continue;
+          if (seenSignals.has(change.doc.id)) continue;
+          seenSignals.add(change.doc.id);
+
+          const sig = change.doc.data();
+          if (sig.roomId !== activeCallRoomId || sig.to !== user.uid) continue;
+
+          const senderProf = allUsers.find(u => u.uid === sig.from) || { displayName: 'Usuário' };
+          const pc = getOrCreatePeerConnection(sig.from, senderProf);
+
+          try {
+            if (sig.type === 'offer') {
+              await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
+                roomId: activeCallRoomId,
+                from: user.uid,
+                to: sig.from,
+                type: 'answer',
+                sdp: { type: answer.type, sdp: answer.sdp },
+                createdAt: Date.now()
+              });
+            } else if (sig.type === 'answer') {
+              if (pc.signalingState === 'have-local-offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+              }
+            } else if (sig.type === 'candidate' && sig.candidate) {
+              await pc.addIceCandidate(new RTCIceCandidate(sig.candidate));
+            }
+          } catch (e) {}
+        }
+      }
+    );
+
+    return () => {
+      unsubPeers();
+      unsubSignals();
+    };
+  }, [user, activeCallRoomId, allUsers]);
+
+  const handleToggleMic = async () => {
+    if (!localStreamRef.current) {
+      setIsMicMuted(!isMicMuted);
+      return;
+    }
+    const tracks = localStreamRef.current.getAudioTracks();
+    if (tracks.length === 0) {
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const track = micStream.getAudioTracks()[0];
+        localStreamRef.current.addTrack(track);
+        Object.values(peerConnectionsRef.current).forEach(pc => pc.addTrack(track, localStreamRef.current));
+        initVoiceActivityDetection(localStreamRef.current);
+        setIsMicMuted(false);
+        setMediaError(null);
+      } catch (e) {
+        showToast('Permissão de microfone bloqueada pelo navegador.', true);
+      }
+      return;
+    }
+    const nextMuted = !isMicMuted;
+    tracks.forEach(t => { t.enabled = !nextMuted; });
+    setIsMicMuted(nextMuted);
+  };
+
+  const handleToggleCamera = async () => {
+    if (!localStreamRef.current || !activeCallRoomId) return;
+    if (isCamEnabled) {
+      localStreamRef.current.getVideoTracks().forEach(t => {
+        t.stop();
+        localStreamRef.current.removeTrack(t);
+      });
+      setIsCamEnabled(false);
+    } else {
+      try {
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const videoTrack = camStream.getVideoTracks()[0];
+        localStreamRef.current.addTrack(videoTrack);
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+
+        for (const [remoteUid, pc] of Object.entries(peerConnectionsRef.current)) {
+          pc.addTrack(videoTrack, localStreamRef.current);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
+            roomId: activeCallRoomId,
+            from: user.uid,
+            to: remoteUid,
+            type: 'offer',
+            sdp: { type: offer.type, sdp: offer.sdp },
+            createdAt: Date.now()
+          });
+        }
+        setIsCamEnabled(true);
+        setIsScreenSharing(false);
+      } catch (e) {
+        showToast('Não foi possível ligar a câmera. Verifique as permissões.', true);
+      }
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    if (!localStreamRef.current || !activeCallRoomId) return;
+    if (isScreenSharing) {
+      localStreamRef.current.getVideoTracks().forEach(t => {
+        t.stop();
+        localStreamRef.current.removeTrack(t);
+      });
+      setIsScreenSharing(false);
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${activeCallRoomId}_${user.uid}`), {
+        isScreenSharing: false
+      });
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenTrack = screenStream.getVideoTracks()[0];
+
+        localStreamRef.current.getVideoTracks().forEach(t => {
+          t.stop();
+          localStreamRef.current.removeTrack(t);
+        });
+        localStreamRef.current.addTrack(screenTrack);
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+
+        screenTrack.onended = async () => {
+          setIsScreenSharing(false);
+          try {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${activeCallRoomId}_${user.uid}`), {
+              isScreenSharing: false
+            });
+          } catch (e) {}
+        };
+
+        for (const [remoteUid, pc] of Object.entries(peerConnectionsRef.current)) {
+          pc.addTrack(screenTrack, localStreamRef.current);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
+            roomId: activeCallRoomId,
+            from: user.uid,
+            to: remoteUid,
+            type: 'offer',
+            sdp: { type: offer.type, sdp: offer.sdp },
+            createdAt: Date.now()
+          });
+        }
+        setIsScreenSharing(true);
+        setIsCamEnabled(false);
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${activeCallRoomId}_${user.uid}`), {
+          isScreenSharing: true
+        });
+      } catch (e) {
+        showToast('Compartilhamento de tela cancelado.', true);
+      }
+    }
+  };
+
+  // ==========================================================================
+  // DADOS DERIVADOS (AMIGOS REAIS, SERVIDORES REAIS E MEMBROS REAIS)
+  // ==========================================================================
+  const friendsList = useMemo(() => {
+    if (!userProfile?.friends) return [];
+    return allUsers.filter(u => userProfile.friends.includes(u.uid));
+  }, [allUsers, userProfile]);
+
+  const onlineFriendsList = useMemo(() => {
+    return friendsList.filter(f => (f.status || 'online') !== 'offline');
+  }, [friendsList]);
+
+  const incomingRequests = useMemo(() => {
+    if (!user) return [];
+    return friendRequests.filter(r => r.toUid === user.uid && r.status === 'pending');
+  }, [friendRequests, user]);
+
+  const outgoingRequests = useMemo(() => {
+    if (!user) return [];
+    return friendRequests.filter(r => r.fromUid === user.uid && r.status === 'pending');
+  }, [friendRequests, user]);
+
+  const activeFriend = useMemo(
+    () => allUsers.find(u => u.uid === activeFriendUid) || null,
+    [allUsers, activeFriendUid]
+  );
+
+  const activeServer = useMemo(
+    () => servers.find(s => s.id === activeServerId) || null,
+    [servers, activeServerId]
+  );
+
+  const activeServerChannels = useMemo(
+    () => channels.filter(c => c.serverId === activeServerId),
+    [channels, activeServerId]
+  );
+
+  const activeChannel = useMemo(
+    () => activeServerChannels.find(c => c.id === activeChannelId) || null,
+    [activeServerChannels, activeChannelId]
+  );
+
+  const activeServerMembers = useMemo(() => {
+    if (!activeServer?.members) return [];
+    return allUsers.filter(u => activeServer.members.includes(u.uid));
+  }, [allUsers, activeServer]);
+
+  // ==========================================================================
+  // AÇÕES DO USUÁRIO (UPLOAD DO PC, AMIZADES, SERVIDORES, MENSAGENS)
+  // ==========================================================================
+  const handleAvatarUploadFromPC = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const compressedDataUrl = await compressImageFromPC(file, 256, 0.85);
+      setEditAvatarDataUrl(compressedDataUrl);
+      showToast('Foto carregada do computador. Clique em Salvar Alterações para confirmar.');
+    } catch (err) {
+      showToast(err.message || 'Erro ao carregar foto do computador.', true);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleChatImageUploadFromPC = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressedDataUrl = await compressImageFromPC(file, 800, 0.8);
+      setAttachedImageDataUrl(compressedDataUrl);
+    } catch (err) {
+      showToast(err.message || 'Erro ao anexar imagem do computador.', true);
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!user || !userProfile || !editDisplayName.trim() || !editUsername.trim()) return;
+
+    const cleanUser = editUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const fullHandle = `${cleanUser}#${userProfile.tag}`;
+
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), {
+      displayName: editDisplayName.trim(),
+      username: cleanUser,
+      fullHandle,
+      bio: editBio.trim(),
+      avatarDataUrl: editAvatarDataUrl,
+      avatarColor: editAvatarColor,
+      bannerColor: editBannerColor
+    });
+
+    setShowSettingsModal(false);
+    showToast('Configurações de perfil salvas no servidor!');
+  };
+
+  const handleSendFriendRequest = async (e) => {
+    e.preventDefault();
+    if (!user || !userProfile || !friendQuery.trim()) return;
+    setFriendFeedback(null);
+
+    const search = friendQuery.trim().replace(/^@/, '').toLowerCase();
+    const target = allUsers.find(
+      u => u.fullHandle?.toLowerCase() === search || u.uid.toLowerCase() === search
+    );
+
+    if (!target) {
+      setFriendFeedback({
+        isError: true,
+        text: 'Hm, não funcionou. Confira se o nome de usuário e a #tag estão corretos.'
+      });
+      return;
+    }
+
+    if (target.uid === user.uid) {
+      setFriendFeedback({ isError: true, text: 'Você não pode adicionar a si mesmo.' });
+      return;
+    }
+
+    if (userProfile.friends?.includes(target.uid)) {
+      setFriendFeedback({ isError: true, text: 'Vocês já são amigos!' });
+      return;
+    }
+
+    const exists = friendRequests.some(
+      r =>
+        r.status === 'pending' &&
+        ((r.fromUid === user.uid && r.toUid === target.uid) ||
+          (r.fromUid === target.uid && r.toUid === user.uid))
+    );
+    if (exists) {
+      setFriendFeedback({ isError: true, text: 'Já existe um pedido de amizade pendente entre vocês.' });
+      return;
+    }
+
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'friend_requests'), {
+      fromUid: user.uid,
+      fromName: userProfile.displayName,
+      fromHandle: userProfile.fullHandle,
+      toUid: target.uid,
+      toName: target.displayName,
+      toHandle: target.fullHandle,
+      status: 'pending',
+      createdAt: Date.now()
+    });
+
+    setFriendQuery('');
+    setFriendFeedback({
+      isError: false,
+      text: `Sucesso! Seu pedido de amizade para ${target.fullHandle} foi enviado.`
+    });
+  };
+
+  const handleAcceptRequest = async (req) => {
+    if (!user) return;
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'friend_requests', req.id), {
+      status: 'accepted'
+    });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), {
+      friends: arrayUnion(req.fromUid)
+    });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', req.fromUid), {
+      friends: arrayUnion(user.uid)
+    });
+    showToast(`Pedido de amizade de ${req.fromName} aceito!`);
+  };
+
+  const handleDeclineRequest = async (reqId) => {
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'friend_requests', reqId));
+    showToast('Pedido removido');
+  };
+
+  const handleCreateServer = async (e) => {
+    e.preventDefault();
+    if (!user || !newServerName.trim()) return;
+
+    const inviteCode = generateInviteCode();
+    const srvRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'servers'), {
+      name: newServerName.trim(),
+      ownerId: user.uid,
+      inviteCode,
+      members: [user.uid],
+      createdAt: Date.now()
+    });
+
+    const textChRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
+      serverId: srvRef.id,
+      name: 'geral',
+      type: 'text',
+      createdAt: Date.now()
+    });
+
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
+      serverId: srvRef.id,
+      name: 'Geral',
+      type: 'voice',
+      createdAt: Date.now() + 1
+    });
+
+    setActiveServerId(srvRef.id);
+    setActiveChannelId(textChRef.id);
+    setViewMode('server');
+    setNewServerName('');
+    setShowServerModal(false);
+    showToast(`Servidor criado! Código de convite: ${inviteCode}`);
+  };
+
+  const handleJoinServer = async (e) => {
+    e.preventDefault();
+    if (!user || !joinInviteCode.trim()) return;
+
+    const cleanCode = joinInviteCode.trim().toUpperCase();
+    const unsubOnce = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'servers'),
+      async (snap) => {
+        unsubOnce();
+        const targetSrv = snap.docs.find(d => d.data().inviteCode?.toUpperCase() === cleanCode);
+        if (!targetSrv) {
+          showToast('Convite inválido ou expirado.', true);
+          return;
+        }
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'servers', targetSrv.id), {
+          members: arrayUnion(user.uid)
+        });
+        const firstCh = channels.find(c => c.serverId === targetSrv.id);
+        setActiveServerId(targetSrv.id);
+        if (firstCh) setActiveChannelId(firstCh.id);
+        setViewMode('server');
+        setJoinInviteCode('');
+        setShowServerModal(false);
+        showToast(`Você entrou em ${targetSrv.data().name}!`);
+      }
+    );
+  };
+
+  const handleCreateChannel = async (e) => {
+    e.preventDefault();
+    if (!user || !activeServerId || !newChannelName.trim()) return;
+
+    const formatted = newChannelType === 'text'
+      ? newChannelName.trim().toLowerCase().replace(/\s+/g, '-')
+      : newChannelName.trim();
+
+    const chRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
+      serverId: activeServerId,
+      name: formatted,
+      type: newChannelType,
+      createdAt: Date.now()
+    });
+
+    setActiveChannelId(chRef.id);
+    if (newChannelType === 'voice') {
+      joinCallRoom(`ch_${chRef.id}`, formatted, false);
+    }
+    setNewChannelName('');
+    setShowChannelModal(false);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!user || !userProfile || !currentRoomId) return;
+    if (!messageInput.trim() && !attachedImageDataUrl) return;
+
+    const text = messageInput.trim();
+    const imgData = attachedImageDataUrl;
+    setMessageInput('');
+    setAttachedImageDataUrl('');
+
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
+      roomId: currentRoomId,
+      senderId: user.uid,
+      text,
+      imageDataUrl: imgData,
+      reactions: {},
+      edited: false,
+      clientTimestamp: Date.now(),
+      createdAt: serverTimestamp()
+    });
+  };
+
+  const handleAccountAuth = async (e) => {
+    e.preventDefault();
+    if (!accountEmail.trim() || !accountPassword.trim()) return;
+    try {
+      if (accountIsSignUp) {
+        await createUserWithEmailAndPassword(auth, accountEmail.trim(), accountPassword);
+        showToast('Conta registrada com sucesso!');
+      } else {
+        await signInWithEmailAndPassword(auth, accountEmail.trim(), accountPassword);
+        showToast('Sessão iniciada!');
+      }
+      setShowAccountModal(false);
+      setAccountEmail('');
+      setAccountPassword('');
+    } catch (err) {
+      showToast('Erro na autenticação: verifique o e-mail e a senha (mín. 6 caracteres).', true);
+    }
+  };
+
+  // ==========================================================================
+  // TELA DE CARREGAMENTO
+  // ==========================================================================
+  if (authLoading || !userProfile) {
+    return (
+      <div className="h-screen w-screen bg-[#313338] flex flex-col items-center justify-center text-white">
+        <div className="w-16 h-16 rounded-2xl bg-[#5865F2] flex items-center justify-center shadow-lg animate-pulse mb-4">
+          <DoorOpen className="w-9 h-9 text-white" />
+        </div>
+        <div className="text-sm font-bold tracking-wider uppercase text-[#B5BAC1]">
+          Conectando ao Doors.cord...
+        </div>
+      </div>
+    );
+  }
+
+  const remotePeerEntries = Object.entries(remotePeers);
+
+  return (
+    <div className="h-screen w-screen overflow-hidden flex bg-[#313338] text-[#DBDEE1] font-sans antialiased select-none">
+      
+      {/* NOTIFICAÇÃO TOAST */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-md shadow-xl text-xs font-semibold text-white flex items-center gap-2 ${
+            toast.isError ? 'bg-[#F23F43]' : 'bg-[#23A55A]'
+          }`}
+        >
+          {toast.isError ? <AlertCircle className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
+      {/* ====================================================================
+          1. BARRA LATERAL ESQUERDA EXTREMA: SERVIDORES DOORS.CORD (#1E1F22)
+         ==================================================================== */}
+      <nav className="w-[72px] bg-[#1E1F22] flex flex-col items-center py-3 gap-2 shrink-0 z-30">
+        {/* Botão Início / Mensagens Diretas (Doors.cord Logo) */}
+        <div className="relative group flex items-center justify-center w-full">
+          <span
+            className={`absolute left-0 w-1 bg-white rounded-r-full transition-all duration-200 ${
+              viewMode === 'home' ? 'h-10' : 'h-0 group-hover:h-5'
+            }`}
+          />
+          <button
+            onClick={() => {
+              setViewMode('home');
+              if (homeTab === 'dm' && !activeFriendUid) setHomeTab('online');
+            }}
+            title="Mensagens Diretas — Doors.cord"
+            className={`w-12 h-12 flex items-center justify-center transition-all duration-200 ${
+              viewMode === 'home'
+                ? 'rounded-2xl bg-[#5865F2] text-white'
+                : 'rounded-3xl bg-[#313338] text-[#DBDEE1] hover:rounded-2xl hover:bg-[#5865F2] hover:text-white'
+            }`}
+          >
+            <DoorOpen className="w-6 h-6" />
+          </button>
+          {incomingRequests.length > 0 && (
+            <span className="absolute bottom-0 right-3 w-4 h-4 rounded-full bg-[#F23F43] border-2 border-[#1E1F22] text-[10px] font-bold text-white flex items-center justify-center">
+              {incomingRequests.length}
+            </span>
+          )}
+        </div>
+
+        <div className="w-8 h-[2px] bg-[#35363C] rounded-full my-0.5" />
+
+        {/* Lista de Servidores Reais */}
+        <div className="flex-1 w-full overflow-y-auto flex flex-col items-center gap-2 no-scrollbar">
+          {servers.map(srv => {
+            const isSelected = viewMode === 'server' && activeServerId === srv.id;
+            const initials = srv.name
+              .split(' ')
+              .map(w => w[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase();
+
+            return (
+              <div key={srv.id} className="relative group flex items-center justify-center w-full">
+                <span
+                  className={`absolute left-0 w-1 bg-white rounded-r-full transition-all duration-200 ${
+                    isSelected ? 'h-10' : 'h-0 group-hover:h-5'
+                  }`}
+                />
+                <button
+                  onClick={() => {
+                    setActiveServerId(srv.id);
+                    setViewMode('server');
+                    const firstCh = channels.find(c => c.serverId === srv.id);
+                    if (firstCh) setActiveChannelId(firstCh.id);
+                  }}
+                  title={srv.name}
+                  className={`w-12 h-12 flex items-center justify-center font-bold text-sm transition-all duration-200 ${
+                    isSelected
+                      ? 'rounded-2xl bg-[#5865F2] text-white'
+                      : 'rounded-3xl bg-[#313338] text-[#DBDEE1] hover:rounded-2xl hover:bg-[#5865F2] hover:text-white'
+                  }`}
+                >
+                  {initials}
+                </button>
+              </div>
+            );
+          })}
+
+          {/* Botão Adicionar ou Entrar em Servidor */}
+          <button
+            onClick={() => setShowServerModal(true)}
+            title="Adicionar um servidor"
+            className="w-12 h-12 rounded-3xl hover:rounded-2xl bg-[#313338] hover:bg-[#23A55A] text-[#23A55A] hover:text-white flex items-center justify-center transition-all duration-200"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
+      </nav>
+
+      {/* ====================================================================
+          2. COLUNA DE CANAIS / MENSAGENS DIRETAS + PAINEL DO USUÁRIO (#2B2D31)
+         ==================================================================== */}
+      <aside
+        className={`${
+          mobileMenuOpen ? 'fixed inset-y-0 left-[72px] z-40 flex' : 'hidden md:flex'
+        } w-60 bg-[#2B2D31] flex-col shrink-0`}
+      >
+        {viewMode === 'home' ? (
+          /* BARRA LATERAL DE MENSAGENS DIRETAS */
+          <>
+            <div className="h-12 px-3 border-b border-[#1F2023] flex items-center shadow-xs shrink-0">
+              <button
+                onClick={() => setHomeTab('add')}
+                className="w-full h-7 px-2 rounded bg-[#1E1F22] text-[#949BA4] text-xs text-left flex items-center justify-between hover:text-[#DBDEE1]"
+              >
+                <span>Encontre ou comece uma conversa</span>
+                <Search className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
+              <button
+                onClick={() => { setHomeTab('online'); setMobileMenuOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-colors ${
+                  homeTab !== 'dm'
+                    ? 'bg-[#404249] text-white'
+                    : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#DBDEE1]'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                <span>Amigos</span>
+                {incomingRequests.length > 0 && (
+                  <span className="ml-auto bg-[#F23F43] text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full">
+                    {incomingRequests.length}
+                  </span>
+                )}
+              </button>
+
+              <div className="pt-4 pb-1 px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#949BA4]">
+                <span>Mensagens Diretas</span>
+                <button
+                  onClick={() => setHomeTab('add')}
+                  className="hover:text-white"
+                  title="Criar DM"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {friendsList.length === 0 ? (
+                <div className="px-2 py-4 text-xs text-[#949BA4] leading-relaxed">
+                  Nenhuma conversa direta ainda. Clique em Amigos para adicionar alguém pelo nome#tag.
+                </div>
+              ) : (
+                friendsList.map(friend => {
+                  const isActive = homeTab === 'dm' && activeFriendUid === friend.uid;
+                  return (
+                    <button
+                      key={friend.uid}
+                      onClick={() => {
+                        setActiveFriendUid(friend.uid);
+                        setHomeTab('dm');
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-2 py-1.5 rounded transition-colors ${
+                        isActive
+                          ? 'bg-[#404249] text-white'
+                          : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#DBDEE1]'
+                      }`}
+                    >
+                      <UserAvatar profile={friend} size="sm" showStatus />
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="text-sm font-medium truncate">{friend.displayName}</div>
+                        {friend.bio && (
+                          <div className="text-[11px] text-[#949BA4] truncate">{friend.bio}</div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : (
+          /* BARRA LATERAL DO SERVIDOR ATIVO */
+          <>
+            <div className="h-12 px-4 border-b border-[#1F2023] flex items-center justify-between shadow-xs shrink-0">
+              <span className="font-bold text-white text-sm truncate">{activeServer?.name}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(activeServer?.inviteCode || '');
+                  showToast(`Código de convite copiado: ${activeServer?.inviteCode}`);
+                }}
+                className="p-1.5 rounded hover:bg-[#35373C] text-[#B5BAC1] hover:text-white"
+                title={`Convidar pessoas (${activeServer?.inviteCode})`}
+              >
+                <UserPlus className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+              {/* Banner discreto com código de convite real */}
+              <div className="mx-1 p-2.5 rounded bg-[#1E1F22] border border-[#35373C] flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-[#949BA4]">Convite do Servidor</div>
+                  <div className="text-xs font-mono font-bold text-white">{activeServer?.inviteCode}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(activeServer?.inviteCode || '');
+                    showToast('Código copiado!');
+                  }}
+                  className="px-2.5 py-1 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-medium"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              {/* Canais de Texto */}
+              <div>
+                <div className="flex items-center justify-between px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-[#949BA4] hover:text-[#DBDEE1]">
+                  <span className="flex items-center gap-0.5">
+                    <ChevronDown className="w-3 h-3" /> Canais de Texto
+                  </span>
+                  <button
+                    onClick={() => { setNewChannelType('text'); setShowChannelModal(true); }}
+                    title="Criar Canal de Texto"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-0.5">
+                  {activeServerChannels.filter(c => c.type === 'text').map(ch => {
+                    const isSelected = activeChannelId === ch.id;
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => {
+                          setActiveChannelId(ch.id);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium transition-colors ${
+                          isSelected
+                            ? 'bg-[#404249] text-white'
+                            : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#DBDEE1]'
+                        }`}
+                      >
+                        <Hash className="w-4 h-4 text-[#80848E] shrink-0" />
+                        <span className="truncate">{ch.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Canais de Voz */}
+              <div>
+                <div className="flex items-center justify-between px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-[#949BA4] hover:text-[#DBDEE1]">
+                  <span className="flex items-center gap-0.5">
+                    <ChevronDown className="w-3 h-3" /> Canais de Voz
+                  </span>
+                  <button
+                    onClick={() => { setNewChannelType('voice'); setShowChannelModal(true); }}
+                    title="Criar Canal de Voz"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-0.5">
+                  {activeServerChannels.filter(c => c.type === 'voice').map(ch => {
+                    const isConnected = activeCallRoomId === `ch_${ch.id}`;
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => {
+                          setActiveChannelId(ch.id);
+                          joinCallRoom(`ch_${ch.id}`, ch.name, false);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-sm font-medium transition-colors ${
+                          isConnected
+                            ? 'bg-[#404249] text-white'
+                            : 'text-[#949BA4] hover:bg-[#35373C] hover:text-[#DBDEE1]'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 truncate">
+                          <Volume2 className={`w-4 h-4 shrink-0 ${isConnected ? 'text-[#23A55A]' : 'text-[#80848E]'}`} />
+                          <span className="truncate">{ch.name}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* BARRA DE CONEXÃO DE VOZ ATIVA (ACIMA DO PAINEL DE USUÁRIO) */}
+        {activeCallRoomId && (
+          <div className="bg-[#232428] border-b border-[#1E1F22] px-3 py-2">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-[#23A55A] flex items-center gap-1">
+                  <Radio className="w-3.5 h-3.5 animate-pulse" /> Voz conectada
+                </div>
+                <div className="text-[11px] text-[#949BA4] truncate">{activeCallTitle}</div>
+              </div>
+              <button
+                onClick={leaveCallRoom}
+                className="p-1.5 rounded hover:bg-[#35373C] text-[#B5BAC1] hover:text-[#F23F43]"
+                title="Desconectar"
+              >
+                <PhoneOff className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PAINEL CLÁSSICO DO USUÁRIO INFERIOR (#232428) */}
+        <div className="h-[52px] bg-[#232428] px-2 flex items-center justify-between relative shrink-0">
+          <button
+            onClick={() => setShowStatusMenu(!showStatusMenu)}
+            className="flex items-center gap-2 p-1 rounded hover:bg-[#35373C] min-w-0 flex-1 text-left"
+          >
+            <UserAvatar
+              profile={userProfile}
+              size="sm"
+              showStatus
+              speaking={micLevel > 15 && !isMicMuted}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold text-white truncate">{userProfile.displayName}</div>
+              <div className="text-[11px] text-[#949BA4] truncate">#{userProfile.tag}</div>
+            </div>
+          </button>
+
+          {showStatusMenu && (
+            <div className="absolute bottom-14 left-2 w-56 bg-[#111214] border border-[#1E1F22] rounded-md shadow-2xl p-1.5 z-50">
+              {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                <button
+                  key={key}
+                  onClick={async () => {
+                    setShowStatusMenu(false);
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), {
+                      status: key
+                    });
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded hover:bg-[#5865F2] text-left group"
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${cfg.dotColor}`} />
+                  <span className="text-xs font-medium text-[#DBDEE1] group-hover:text-white">
+                    {cfg.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center">
+            <button
+              onClick={handleToggleMic}
+              className={`p-1.5 rounded hover:bg-[#35373C] ${
+                isMicMuted ? 'text-[#F23F43]' : 'text-[#B5BAC1] hover:text-white'
+              }`}
+              title={isMicMuted ? 'Ativar microfone' : 'Silenciar'}
+            >
+              {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+
+            <button
+              onClick={() => setIsDeafened(!isDeafened)}
+              className={`p-1.5 rounded hover:bg-[#35373C] ${
+                isDeafened ? 'text-[#F23F43]' : 'text-[#B5BAC1] hover:text-white'
+              }`}
+              title={isDeafened ? 'Ativar áudio' : 'Desativar áudio'}
+            >
+              {isDeafened ? <HeadphoneOff className="w-4 h-4" /> : <Headphones className="w-4 h-4" />}
+            </button>
+
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="p-1.5 rounded hover:bg-[#35373C] text-[#B5BAC1] hover:text-white"
+              title="Configurações de Usuário"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ====================================================================
+          3. ÁREA PRINCIPAL DE CHAT, CHAMADA WEBRTC OU AMIGOS (#313338)
+         ==================================================================== */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#313338]">
+        
+        {/* CABEÇALHO SUPERIOR DA ÁREA CENTRAL */}
+        <header className="h-12 px-4 border-b border-[#1F2023] flex items-center justify-between shadow-xs shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden text-[#B5BAC1] hover:text-white"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            {viewMode === 'home' ? (
+              homeTab === 'dm' && activeFriend ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <AtSign className="w-5 h-5 text-[#80848E] shrink-0" />
+                  <span className="font-bold text-white text-sm truncate">{activeFriend.displayName}</span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[activeFriend.status || 'online']?.dotColor}`} />
+                </div>
+              ) : (
+                /* Abas Clássicas de Amigos do Discord */
+                <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
+                  <div className="flex items-center gap-2 font-bold text-white text-sm pr-2 border-r border-[#3F4147] shrink-0">
+                    <Users className="w-5 h-5 text-[#80848E]" />
+                    <span>Amigos</span>
+                  </div>
+                  <button
+                    onClick={() => setHomeTab('online')}
+                    className={`px-2 py-1 rounded text-xs sm:text-sm font-medium shrink-0 ${
+                      homeTab === 'online' ? 'bg-[#404249] text-white' : 'text-[#B5BAC1] hover:bg-[#35373C] hover:text-white'
+                    }`}
+                  >
+                    Online
+                  </button>
+                  <button
+                    onClick={() => setHomeTab('all')}
+                    className={`px-2 py-1 rounded text-xs sm:text-sm font-medium shrink-0 ${
+                      homeTab === 'all' ? 'bg-[#404249] text-white' : 'text-[#B5BAC1] hover:bg-[#35373C] hover:text-white'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    onClick={() => setHomeTab('pending')}
+                    className={`px-2 py-1 rounded text-xs sm:text-sm font-medium flex items-center gap-1.5 shrink-0 ${
+                      homeTab === 'pending' ? 'bg-[#404249] text-white' : 'text-[#B5BAC1] hover:bg-[#35373C] hover:text-white'
+                    }`}
+                  >
+                    <span>Pendente</span>
+                    {incomingRequests.length > 0 && (
+                      <span className="bg-[#F23F43] text-white text-[10px] font-bold px-1.5 rounded-full">
+                        {incomingRequests.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setHomeTab('add')}
+                    className={`px-2.5 py-1 rounded text-xs sm:text-sm font-medium shrink-0 ${
+                      homeTab === 'add'
+                        ? 'text-[#23A55A] bg-transparent'
+                        : 'bg-[#248046] text-white hover:bg-[#1A6334]'
+                    }`}
+                  >
+                    Adicionar amigo
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="flex items-center gap-2 min-w-0">
+                <Hash className="w-5 h-5 text-[#80848E] shrink-0" />
+                <span className="font-bold text-white text-sm truncate">{activeChannel?.name || 'geral'}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Ações à Direita do Cabeçalho (Identificador próprio + Chamada em DM + Lista de Membros) */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(userProfile.fullHandle);
+                showToast(`Seu usuário copiado: ${userProfile.fullHandle}`);
+              }}
+              className="hidden sm:flex items-center gap-1.5 bg-[#1E1F22] hover:bg-[#2B2D31] px-2.5 py-1 rounded text-xs text-[#B5BAC1] hover:text-white"
+              title="Clique para copiar seu nome#tag e enviar a um amigo"
+            >
+              <span className="font-mono">{userProfile.fullHandle}</span>
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+
+            {viewMode === 'home' && homeTab === 'dm' && activeFriend && (
+              <>
+                <button
+                  onClick={() =>
+                    joinCallRoom(
+                      `dmcall_${getDmRoomId(user.uid, activeFriend.uid)}`,
+                      `Chamada com ${activeFriend.displayName}`,
+                      false
+                    )
+                  }
+                  className="p-1.5 rounded hover:bg-[#35373C] text-[#B5BAC1] hover:text-white"
+                  title="Iniciar chamada de voz"
+                >
+                  <PhoneCall className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() =>
+                    joinCallRoom(
+                      `dmcall_${getDmRoomId(user.uid, activeFriend.uid)}`,
+                      `Vídeo com ${activeFriend.displayName}`,
+                      true
+                    )
+                  }
+                  className="p-1.5 rounded hover:bg-[#35373C] text-[#B5BAC1] hover:text-white"
+                  title="Iniciar chamada de vídeo"
+                >
+                  <Video className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            {viewMode === 'server' && activeServer && (
+              <button
+                onClick={() => setShowMembersSidebar(!showMembersSidebar)}
+                className={`p-1.5 rounded hover:bg-[#35373C] ${
+                  showMembersSidebar ? 'text-white' : 'text-[#B5BAC1]'
+                }`}
+                title="Mostrar/ocultar lista de membros"
+              >
+                <Users className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* PALCO DE CHAMADA WEBRTC REAL (VOZ, CÂMERA E TELA COMPARTILHADA) */}
+        {activeCallRoomId && (
+          <section className="bg-[#111214] border-b border-[#1E1F22] p-4 shrink-0">
+            <div className="max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                {/* Vídeo/Áudio Local */}
+                <div
+                  className={`relative aspect-video bg-[#1E1F22] rounded-lg overflow-hidden flex flex-col items-center justify-center border-2 ${
+                    micLevel > 15 && !isMicMuted ? 'border-[#23A55A]' : 'border-transparent'
+                  }`}
+                >
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className={`w-full h-full object-cover ${isCamEnabled || isScreenSharing ? 'block' : 'hidden'}`}
+                  />
+                  {!isCamEnabled && !isScreenSharing && (
+                    <UserAvatar profile={userProfile} size="lg" speaking={micLevel > 15 && !isMicMuted} />
+                  )}
+                  <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 px-2.5 py-1 rounded text-xs font-semibold text-white">
+                    {userProfile.displayName}
+                  </div>
+                </div>
+
+                {/* Vídeo/Áudio Remoto de Outros Participantes Reais */}
+                {remotePeerEntries.map(([uid, peer]) => (
+                  <RemotePeerCard
+                    key={uid}
+                    peerData={peer.profile}
+                    stream={peer.stream}
+                    isDeafened={isDeafened}
+                  />
+                ))}
+              </div>
+
+              {mediaError && (
+                <div className="mt-2.5 text-xs text-[#F0B232] bg-[#F0B232]/10 border border-[#F0B232]/30 px-3 py-1.5 rounded">
+                  {mediaError}
+                </div>
+              )}
+
+              {/* Controles Inferiores da Chamada */}
+              <div className="mt-3 flex items-center justify-center gap-3">
+                <button
+                  onClick={handleToggleCamera}
+                  className={`p-3 rounded-full transition-colors ${
+                    isCamEnabled
+                      ? 'bg-white text-[#111214]'
+                      : 'bg-[#2B2D31] hover:bg-[#35373C] text-white'
+                  }`}
+                  title={isCamEnabled ? 'Desligar câmera' : 'Ligar câmera'}
+                >
+                  {isCamEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+                </button>
+
+                <button
+                  onClick={handleToggleScreenShare}
+                  className={`p-3 rounded-full transition-colors ${
+                    isScreenSharing
+                      ? 'bg-[#23A55A] text-white'
+                      : 'bg-[#2B2D31] hover:bg-[#35373C] text-white'
+                  }`}
+                  title="Compartilhar tela"
+                >
+                  <Monitor className="w-5 h-5" />
+                </button>
+
+                <button
+                  onClick={handleToggleMic}
+                  className={`p-3 rounded-full transition-colors ${
+                    isMicMuted
+                      ? 'bg-white text-[#111214]'
+                      : 'bg-[#2B2D31] hover:bg-[#35373C] text-white'
+                  }`}
+                  title={isMicMuted ? 'Ativar microfone' : 'Silenciar'}
+                >
+                  {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </button>
+
+                <button
+                  onClick={leaveCallRoom}
+                  className="p-3 rounded-full bg-[#F23F43] hover:bg-[#DA373C] text-white transition-colors"
+                  title="Desconectar"
+                >
+                  <PhoneOff className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* CONTEÚDO CENTRAL: AMIGOS vs CHAT */}
+        {viewMode === 'home' && homeTab !== 'dm' ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            {homeTab === 'add' && (
+              <div className="max-w-xl">
+                <h2 className="text-base font-bold uppercase text-white">Adicionar amigo</h2>
+                <p className="text-xs text-[#B5BAC1] mt-1">
+                  Você pode adicionar amigos usando o nome de usuário do Doors.cord deles (ex.: <span className="font-mono text-white">{userProfile.fullHandle}</span>).
+                </p>
+
+                <form
+                  onSubmit={handleSendFriendRequest}
+                  className="mt-4 bg-[#1E1F22] border border-[#1E1F22] focus-within:border-[#5865F2] rounded-lg px-3 py-2 flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    required
+                    value={friendQuery}
+                    onChange={(e) => setFriendQuery(e.target.value)}
+                    placeholder="Você pode adicionar amigos usando o nome de usuário#tag"
+                    className="flex-1 bg-transparent text-sm text-white placeholder-[#80848E] outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!friendQuery.trim()}
+                    className="px-4 py-1.5 rounded bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white text-xs font-medium"
+                  >
+                    Enviar pedido de amizade
+                  </button>
+                </form>
+
+                {friendFeedback && (
+                  <p className={`mt-2 text-xs ${friendFeedback.isError ? 'text-[#F23F43]' : 'text-[#23A55A]'}`}>
+                    {friendFeedback.text}
+                  </p>
+                )}
+
+                <div className="mt-8 pt-6 border-t border-[#3F4147]">
+                  <div className="text-xs font-bold uppercase text-[#949BA4] mb-2">
+                    Seu identificador no Doors.cord
+                  </div>
+                  <div className="flex items-center gap-3 bg-[#2B2D31] p-3 rounded-lg">
+                    <UserAvatar profile={userProfile} size="md" showStatus />
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-white">{userProfile.displayName}</div>
+                      <div className="text-xs font-mono text-[#B5BAC1]">{userProfile.fullHandle}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(userProfile.fullHandle);
+                        showToast('Identificador copiado!');
+                      }}
+                      className="px-3 py-1.5 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-medium"
+                    >
+                      Copiar usuário
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {homeTab === 'pending' && (
+              <div className="max-w-2xl space-y-6">
+                <div>
+                  <h3 className="text-xs font-bold uppercase text-[#949BA4] mb-3">
+                    Pedidos Recebidos — {incomingRequests.length}
+                  </h3>
+                  {incomingRequests.length === 0 ? (
+                    <p className="text-sm text-[#949BA4]">Não há pedidos de amizade pendentes.</p>
+                  ) : (
+                    <div className="divide-y divide-[#3F4147]">
+                      {incomingRequests.map(req => (
+                        <div key={req.id} className="py-3 flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-bold text-white">{req.fromName}</div>
+                            <div className="text-xs text-[#949BA4]">{req.fromHandle}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleAcceptRequest(req)}
+                              className="w-9 h-9 rounded-full bg-[#2B2D31] hover:text-[#23A55A] flex items-center justify-center"
+                              title="Aceitar"
+                            >
+                              <UserCheck className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeclineRequest(req.id)}
+                              className="w-9 h-9 rounded-full bg-[#2B2D31] hover:text-[#F23F43] flex items-center justify-center"
+                              title="Ignorar"
+                            >
+                              <UserX className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {outgoingRequests.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold uppercase text-[#949BA4] mb-3">
+                      Pedidos Enviados — {outgoingRequests.length}
+                    </h3>
+                    <div className="divide-y divide-[#3F4147]">
+                      {outgoingRequests.map(req => (
+                        <div key={req.id} className="py-3 flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-bold text-white">{req.toName}</div>
+                            <div className="text-xs text-[#949BA4]">Pedido enviado para {req.toHandle}</div>
+                          </div>
+                          <button
+                            onClick={() => handleDeclineRequest(req.id)}
+                            className="w-9 h-9 rounded-full bg-[#2B2D31] hover:text-[#F23F43] flex items-center justify-center"
+                            title="Cancelar pedido"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(homeTab === 'online' || homeTab === 'all') && (
+              <div className="max-w-2xl">
+                <h3 className="text-xs font-bold uppercase text-[#949BA4] mb-3">
+                  {homeTab === 'online'
+                    ? `Online — ${onlineFriendsList.length}`
+                    : `Todos os amigos — ${friendsList.length}`}
+                </h3>
+
+                {(homeTab === 'online' ? onlineFriendsList : friendsList).length === 0 ? (
+                  <div className="py-12 text-center text-sm text-[#949BA4]">
+                    Nenhum amigo encontrado nesta lista. Clique em Adicionar amigo para conectar com usuários reais.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[#3F4147]">
+                    {(homeTab === 'online' ? onlineFriendsList : friendsList).map(friend => (
+                      <div
+                        key={friend.uid}
+                        className="py-2.5 px-2 -mx-2 rounded-lg hover:bg-[#393C41] flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <UserAvatar profile={friend} size="md" showStatus />
+                          <div>
+                            <div className="text-sm font-bold text-white">{friend.displayName}</div>
+                            <div className="text-xs text-[#949BA4]">
+                              {STATUS_CONFIG[friend.status || 'online']?.label}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setActiveFriendUid(friend.uid);
+                              setHomeTab('dm');
+                            }}
+                            className="w-9 h-9 rounded-full bg-[#2B2D31] hover:text-white text-[#B5BAC1] flex items-center justify-center"
+                            title="Mensagem"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActiveFriendUid(friend.uid);
+                              setHomeTab('dm');
+                              joinCallRoom(
+                                `dmcall_${getDmRoomId(user.uid, friend.uid)}`,
+                                `Chamada com ${friend.displayName}`,
+                                false
+                              );
+                            }}
+                            className="w-9 h-9 rounded-full bg-[#2B2D31] hover:text-white text-[#B5BAC1] flex items-center justify-center"
+                            title="Iniciar chamada de voz"
+                          >
+                            <PhoneCall className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : viewMode === 'server' && !activeServer ? (
+          /* ESTADO SEM SERVIDOR SELECIONADO */
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-[#2B2D31] flex items-center justify-center text-[#5865F2] mb-4">
+              <DoorOpen className="w-8 h-8" />
+            </div>
+            <h2 className="text-lg font-bold text-white">Nenhum servidor selecionado</h2>
+            <p className="text-sm text-[#949BA4] max-w-md mt-1">
+              Crie um novo servidor ou insira um código de convite no botão + na barra lateral esquerda.
+            </p>
+            <button
+              onClick={() => setShowServerModal(true)}
+              className="mt-4 px-4 py-2 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-medium"
+            >
+              Criar ou Entrar em Servidor
+            </button>
+          </div>
+        ) : (
+          /* FEED DE MENSAGENS EM TEMPO REAL (DM OU CANAL DO SERVIDOR) */
+          <>
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 select-text">
+              {messages.length === 0 ? (
+                <div className="pt-8 pb-4 border-b border-[#3F4147]">
+                  <div className="w-14 h-14 rounded-full bg-[#404249] flex items-center justify-center text-white mb-3">
+                    {viewMode === 'home' ? <AtSign className="w-7 h-7" /> : <Hash className="w-7 h-7" />}
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">
+                    {viewMode === 'home' && activeFriend
+                      ? activeFriend.displayName
+                      : `Bem-vindo(a) a #${activeChannel?.name || 'geral'}!`}
+                  </h2>
+                  <p className="text-sm text-[#949BA4] mt-1">
+                    {viewMode === 'home' && activeFriend
+                      ? `Este é o começo do seu histórico de mensagens diretas com ${activeFriend.displayName}.`
+                      : `Este é o começo do canal #${activeChannel?.name || 'geral'}.`}
+                  </p>
+                </div>
+              ) : (
+                messages.map(msg => {
+                  const senderProfile = allUsers.find(u => u.uid === msg.senderId) || {
+                    displayName: 'Usuário',
+                    avatarColor: 'bg-[#5865F2]'
+                  };
+                  const isMine = msg.senderId === user.uid;
+                  const isEditing = editingMessageId === msg.id;
+                  const reactionEntries = Object.entries(msg.reactions || {});
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className="group relative flex items-start gap-4 py-1 px-2 -mx-2 rounded hover:bg-[#2E3035]"
+                    >
+                      <UserAvatar profile={senderProfile} size="md" />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold text-sm text-white hover:underline">
+                            {senderProfile.displayName}
+                          </span>
+                          <span className="text-[11px] text-[#949BA4]">
+                            {formatTimestamp(msg.createdAt || msg.clientTimestamp)}
+                          </span>
+                        </div>
+
+                        {isEditing ? (
+                          <div className="mt-1">
+                            <input
+                              type="text"
+                              value={editingText}
+                              onChange={(e) => setEditingText(e.target.value)}
+                              onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && editingText.trim()) {
+                                  await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', msg.id), {
+                                    text: editingText.trim(),
+                                    edited: true
+                                  });
+                                  setEditingMessageId(null);
+                                }
+                                if (e.key === 'Escape') setEditingMessageId(null);
+                              }}
+                              autoFocus
+                              className="w-full bg-[#383A40] rounded px-3 py-1.5 text-sm text-white outline-none"
+                            />
+                            <div className="text-[11px] text-[#949BA4] mt-1">
+                              escape para cancelar • enter para salvar
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {msg.text && (
+                              <p className="text-sm text-[#DBDEE1] leading-relaxed break-words whitespace-pre-wrap">
+                                {msg.text}
+                                {msg.edited && (
+                                  <span className="text-[10px] text-[#949BA4] ml-1">(editado)</span>
+                                )}
+                              </p>
+                            )}
+                            {msg.imageDataUrl && (
+                              <img
+                                src={msg.imageDataUrl}
+                                alt="Anexo"
+                                className="mt-2 max-h-72 rounded-md border border-[#1E1F22] object-contain"
+                              />
+                            )}
+                          </>
+                        )}
+
+                        {/* Reações Vetoriais SVG */}
+                        {reactionEntries.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {reactionEntries.map(([vecId, uids]) => {
+                              const vecMeta = VECTOR_REACTIONS.find(v => v.id === vecId);
+                              if (!vecMeta) return null;
+                              const IconComp = vecMeta.Icon;
+                              const reacted = uids.includes(user.uid);
+                              return (
+                                <button
+                                  key={vecId}
+                                  onClick={async () => {
+                                    const next = { ...(msg.reactions || {}) };
+                                    const list = next[vecId] || [];
+                                    if (list.includes(user.uid)) {
+                                      const filtered = list.filter(id => id !== user.uid);
+                                      if (filtered.length === 0) delete next[vecId];
+                                      else next[vecId] = filtered;
+                                    } else {
+                                      next[vecId] = [...list, user.uid];
+                                    }
+                                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', msg.id), {
+                                      reactions: next
+                                    });
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-xs flex items-center gap-1.5 border ${
+                                    reacted
+                                      ? 'bg-[#5865F2]/20 border-[#5865F2] text-white'
+                                      : 'bg-[#2B2D31] border-transparent text-[#B5BAC1] hover:border-[#3F4147]'
+                                  }`}
+                                >
+                                  <IconComp className={`w-3.5 h-3.5 ${vecMeta.color}`} />
+                                  <span>{uids.length}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Barra Flutuante de Ações da Mensagem */}
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center bg-[#313338] border border-[#1E1F22] rounded shadow-md">
+                        <button
+                          onClick={() =>
+                            setReactionPickerMsgId(reactionPickerMsgId === msg.id ? null : msg.id)
+                          }
+                          className="p-1.5 hover:bg-[#35373C] text-[#B5BAC1] hover:text-white"
+                          title="Adicionar reação"
+                        >
+                          <ThumbsUp className="w-4 h-4" />
+                        </button>
+                        {isMine && (
+                          <>
+                            <button
+                              onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.text); }}
+                              className="p-1.5 hover:bg-[#35373C] text-[#B5BAC1] hover:text-white"
+                              title="Editar"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', msg.id))}
+                              className="p-1.5 hover:bg-[#35373C] text-[#F23F43]"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Seletor de Reações Vetoriais */}
+                      {reactionPickerMsgId === msg.id && (
+                        <div className="absolute right-4 -top-8 bg-[#2B2D31] border border-[#1E1F22] rounded-md p-1 flex gap-1 shadow-xl z-20">
+                          {VECTOR_REACTIONS.map(v => {
+                            const IconComp = v.Icon;
+                            return (
+                              <button
+                                key={v.id}
+                                onClick={async () => {
+                                  const next = { ...(msg.reactions || {}) };
+                                  const list = next[v.id] || [];
+                                  next[v.id] = list.includes(user.uid) ? list : [...list, user.uid];
+                                  setReactionPickerMsgId(null);
+                                  await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', msg.id), {
+                                    reactions: next
+                                  });
+                                }}
+                                title={v.label}
+                                className="p-1.5 rounded hover:bg-[#35373C]"
+                              >
+                                <IconComp className={`w-4 h-4 ${v.color}`} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* CAIXA DE ENTRADA DE MENSAGEM + UPLOAD DE IMAGEM DO PC */}
+            <div className="px-4 pb-5 pt-1">
+              {attachedImageDataUrl && (
+                <div className="mb-2 bg-[#2B2D31] p-3 rounded-t-lg border-b border-[#3F4147] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={attachedImageDataUrl}
+                      alt="Prévia"
+                      className="h-16 w-16 object-cover rounded border border-[#1E1F22]"
+                    />
+                    <span className="text-xs text-[#DBDEE1]">Imagem selecionada do computador</span>
+                  </div>
+                  <button
+                    onClick={() => setAttachedImageDataUrl('')}
+                    className="p-1.5 rounded hover:bg-[#35373C] text-[#F23F43]"
+                    title="Remover anexo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              <form
+                onSubmit={handleSendMessage}
+                className="bg-[#383A40] rounded-lg px-4 py-2.5 flex items-center gap-3"
+              >
+                <input
+                  ref={chatFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleChatImageUploadFromPC}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => chatFileInputRef.current?.click()}
+                  className="w-6 h-6 rounded-full bg-[#B5BAC1] hover:bg-white text-[#313338] flex items-center justify-center shrink-0"
+                  title="Enviar imagem do computador"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                </button>
+
+                <input
+                  type="text"
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  placeholder={
+                    viewMode === 'home' && activeFriend
+                      ? `Conversar em @${activeFriend.displayName}`
+                      : `Conversar em #${activeChannel?.name || 'geral'}`
+                  }
+                  className="flex-1 bg-transparent text-sm text-white placeholder-[#80848E] outline-none"
+                />
+
+                <button
+                  type="submit"
+                  disabled={!messageInput.trim() && !attachedImageDataUrl}
+                  className="text-[#B5BAC1] hover:text-white disabled:opacity-40"
+                  title="Enviar mensagem"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* ====================================================================
+          4. COLUNA DIREITA: MEMBROS REAIS DO SERVIDOR (#2B2D31)
+         ==================================================================== */}
+      {viewMode === 'server' && activeServer && showMembersSidebar && (
+        <aside className="hidden lg:flex w-60 bg-[#2B2D31] flex-col px-3 py-4 overflow-y-auto shrink-0">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#949BA4] px-2 mb-2">
+            Membros — {activeServerMembers.length}
+          </h3>
+          <div className="space-y-1">
+            {activeServerMembers.map(member => (
+              <div
+                key={member.uid}
+                className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-[#35373C]"
+              >
+                <UserAvatar profile={member} size="sm" showStatus />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-[#DBDEE1] truncate">
+                    {member.displayName}
+                  </div>
+                  {member.bio && (
+                    <div className="text-[11px] text-[#949BA4] truncate">{member.bio}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+
+      {/* ====================================================================
+          MODAL: CONFIGURAÇÕES DE USUÁRIO (UPLOAD DE FOTO DO COMPUTADOR)
+         ==================================================================== */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#313338] w-full max-w-lg rounded-lg overflow-hidden shadow-2xl border border-[#1E1F22]">
+            <div className={`h-24 ${editBannerColor} relative`}>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white hover:bg-black/60"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="px-6 pb-6">
+              <div className="relative -mt-10 mb-4 flex items-end justify-between">
+                <div className="relative group">
+                  <div
+                    className={`w-20 h-20 rounded-full ${editAvatarColor} border-4 border-[#313338] flex items-center justify-center text-white overflow-hidden`}
+                  >
+                    {editAvatarDataUrl ? (
+                      <img src={editAvatarDataUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10" />
+                    )}
+                  </div>
+
+                  {/* Botão de Upload Direto do PC */}
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUploadFromPC}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-medium"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {uploadingAvatar ? 'Processando...' : 'Enviar foto do computador'}
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-xs font-mono text-[#B5BAC1] bg-[#1E1F22] px-2.5 py-1 rounded">
+                    {userProfile.fullHandle}
+                  </span>
+                  {editAvatarDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setEditAvatarDataUrl('')}
+                      className="text-xs text-[#F23F43] hover:underline"
+                    >
+                      Remover foto
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3.5 bg-[#2B2D31] p-4 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[#B5BAC1] mb-1">
+                      Nome Exibido
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                      className="w-full bg-[#1E1F22] rounded px-3 py-2 text-sm text-white outline-none focus:ring-1 focus:ring-[#5865F2]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[#B5BAC1] mb-1">
+                      Nome de Usuário
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      className="w-full bg-[#1E1F22] rounded px-3 py-2 text-sm text-white font-mono outline-none focus:ring-1 focus:ring-[#5865F2]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-[#B5BAC1] mb-1">
+                    Sobre Mim
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editBio}
+                    onChange={(e) => setEditBio(e.target.value)}
+                    placeholder="Escreva uma descrição curta para seu perfil..."
+                    className="w-full bg-[#1E1F22] rounded px-3 py-2 text-sm text-white outline-none focus:ring-1 focus:ring-[#5865F2] resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[#B5BAC1] mb-1">
+                      Cor Padrão do Avatar
+                    </label>
+                    <div className="flex gap-2">
+                      {AVATAR_COLORS.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setEditAvatarColor(c)}
+                          className={`w-6 h-6 rounded-full ${c} ${
+                            editAvatarColor === c ? 'ring-2 ring-white' : ''
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[#B5BAC1] mb-1">
+                      Cor do Banner
+                    </label>
+                    <div className="flex gap-2">
+                      {BANNER_COLORS.map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setEditBannerColor(b)}
+                          className={`w-6 h-6 rounded-full ${b} ${
+                            editBannerColor === b ? 'ring-2 ring-white' : ''
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[#3F4147] flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettingsModal(false);
+                    setShowAccountModal(true);
+                  }}
+                  className="text-xs text-[#00A8FC] hover:underline flex items-center gap-1"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  {user?.isAnonymous ? 'Vincular e-mail e senha' : 'Conta vinculada'}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSettingsModal(false)}
+                    className="px-4 py-2 text-xs font-medium text-white hover:underline"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded bg-[#248046] hover:bg-[#1A6334] text-white text-xs font-medium"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL: CRIAR OU ENTRAR EM SERVIDOR
+         ==================================================================== */}
+      {showServerModal && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#313338] w-full max-w-md rounded-lg p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">
+                {serverModalTab === 'create' ? 'Crie um servidor' : 'Entrar em um servidor'}
+              </h3>
+              <button onClick={() => setShowServerModal(false)} className="text-[#B5BAC1] hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex gap-2 mb-4 bg-[#1E1F22] p-1 rounded">
+              <button
+                onClick={() => setServerModalTab('create')}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold ${
+                  serverModalTab === 'create' ? 'bg-[#5865F2] text-white' : 'text-[#B5BAC1]'
+                }`}
+              >
+                Criar meu servidor
+              </button>
+              <button
+                onClick={() => setServerModalTab('join')}
+                className={`flex-1 py-1.5 rounded text-xs font-semibold ${
+                  serverModalTab === 'join' ? 'bg-[#5865F2] text-white' : 'text-[#B5BAC1]'
+                }`}
+              >
+                Já tenho um convite
+              </button>
+            </div>
+
+            {serverModalTab === 'create' ? (
+              <form onSubmit={handleCreateServer} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-[#B5BAC1] mb-1.5">
+                    Nome do servidor
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newServerName}
+                    onChange={(e) => setNewServerName(e.target.value)}
+                    placeholder={`Servidor de ${userProfile.displayName}`}
+                    className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none focus:ring-1 focus:ring-[#5865F2]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-medium"
+                >
+                  Criar
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleJoinServer} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-[#B5BAC1] mb-1.5">
+                    Código de convite
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={joinInviteCode}
+                    onChange={(e) => setJoinInviteCode(e.target.value)}
+                    placeholder="Ex: DC-A8K92P"
+                    className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white font-mono uppercase outline-none focus:ring-1 focus:ring-[#5865F2]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-medium"
+                >
+                  Entrar no servidor
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL: CRIAR CANAL NO SERVIDOR
+         ==================================================================== */}
+      {showChannelModal && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#313338] w-full max-w-md rounded-lg p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">Criar canal</h3>
+              <button onClick={() => setShowChannelModal(false)} className="text-[#B5BAC1] hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateChannel} className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-[#B5BAC1]">
+                  Tipo de canal
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setNewChannelType('text')}
+                  className={`w-full p-3 rounded flex items-center gap-3 text-left ${
+                    newChannelType === 'text' ? 'bg-[#404249] text-white' : 'bg-[#2B2D31] text-[#B5BAC1]'
+                  }`}
+                >
+                  <Hash className="w-5 h-5" />
+                  <div>
+                    <div className="text-sm font-semibold">Texto</div>
+                    <div className="text-xs text-[#949BA4]">Envie mensagens, imagens e arquivos</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewChannelType('voice')}
+                  className={`w-full p-3 rounded flex items-center gap-3 text-left ${
+                    newChannelType === 'voice' ? 'bg-[#404249] text-white' : 'bg-[#2B2D31] text-[#B5BAC1]'
+                  }`}
+                >
+                  <Volume2 className="w-5 h-5" />
+                  <div>
+                    <div className="text-sm font-semibold">Voz</div>
+                    <div className="text-xs text-[#949BA4]">Fale por voz, ligue a câmera e compartilhe a tela</div>
+                  </div>
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-[#B5BAC1] mb-1.5">
+                  Nome do canal
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                  placeholder="novo-canal"
+                  className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none focus:ring-1 focus:ring-[#5865F2]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowChannelModal(false)}
+                  className="px-4 py-2 text-xs text-white hover:underline"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-medium"
+                >
+                  Criar canal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL: CONTA COM E-MAIL E SENHA REAIS
+         ==================================================================== */}
+      {showAccountModal && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#313338] w-full max-w-md rounded-lg p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-white">
+                {accountIsSignUp ? 'Registrar conta no Doors.cord' : 'Entrar no Doors.cord'}
+              </h3>
+              <button onClick={() => setShowAccountModal(false)} className="text-[#B5BAC1] hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-[#B5BAC1] mb-4">
+              Salve seu perfil, foto enviada do PC, lista de amigos e servidores para acessar de qualquer dispositivo.
+            </p>
+            <form onSubmit={handleAccountAuth} className="space-y-3">
+              <input
+                type="email"
+                required
+                value={accountEmail}
+                onChange={(e) => setAccountEmail(e.target.value)}
+                placeholder="E-mail"
+                className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none focus:ring-1 focus:ring-[#5865F2]"
+              />
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={accountPassword}
+                onChange={(e) => setAccountPassword(e.target.value)}
+                placeholder="Senha (mínimo 6 caracteres)"
+                className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none focus:ring-1 focus:ring-[#5865F2]"
+              />
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded bg-[#5865F2] hover:bg-[#4752C4] text-white text-sm font-medium"
+              >
+                {accountIsSignUp ? 'Registrar' : 'Entrar'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setAccountIsSignUp(!accountIsSignUp)}
+              className="mt-3 text-xs text-[#00A8FC] hover:underline"
+            >
+              {accountIsSignUp ? 'Já tem uma conta? Entrar' : 'Precisa de uma conta? Registre-se'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
