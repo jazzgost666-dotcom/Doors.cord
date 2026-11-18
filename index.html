@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: Inter -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <!-- React & ReactDOM via CDN -->
+  <!-- React & ReactDOM via CDN (v18) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- Babel Standalone para transpilar JSX no navegador -->
@@ -33,9 +33,16 @@
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div style="height: 100vh; width: 100vw; background-color: #313338; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-family: Inter, sans-serif;">
+      <div style="width: 64px; height: 64px; border-radius: 16px; background-color: #5865F2; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); margin-bottom: 16px;">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      </div>
+      <div style="font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #B5BAC1;">Iniciando Doors.cord...</div>
+    </div>
+  </div>
 
-  <!-- Firebase Modular SDK (v11.6.1) exposto globalmente para o App -->
+  <!-- Firebase Modular SDK (v11.6.1) exposto globalmente -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import {
@@ -79,14 +86,16 @@
       arrayUnion
     };
 
-    window.dispatchEvent(new Event("firebase-ready"));
+    window.__firebaseLoaded = true;
+    if (window.startDoorsCordApp) {
+      window.startDoorsCordApp();
+    }
   </script>
 
   <!-- Código da Aplicação React (JSX) -->
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo } = React;
 
-    // Componente auxiliar para renderizar ícones Lucide SVG sem dependências de bundler
     function LucideIcon({ name, className = "w-5 h-5" }) {
       const containerRef = useRef(null);
       useEffect(() => {
@@ -102,60 +111,12 @@
       return <span ref={containerRef} className="inline-flex items-center justify-center shrink-0" />;
     }
 
-    // ============================================================================
-    // TEMAS DE APARÊNCIA & ACENTOS GRATUITOS
-    // ============================================================================
     const THEMES = {
-      classic: {
-        id: 'classic',
-        name: 'Discord Dark Clássico',
-        bgServer: '#1E1F22',
-        bgSidebar: '#2B2D31',
-        bgMain: '#313338',
-        bgChat: '#313338',
-        bgInput: '#383A40',
-        textNormal: '#DBDEE1'
-      },
-      midnight: {
-        id: 'midnight',
-        name: 'Midnight Black',
-        bgServer: '#0B0C0E',
-        bgSidebar: '#121316',
-        bgMain: '#18191C',
-        bgChat: '#18191C',
-        bgInput: '#202225',
-        textNormal: '#E3E5E8'
-      },
-      amoled: {
-        id: 'amoled',
-        name: 'AMOLED Puro (#000000)',
-        bgServer: '#000000',
-        bgSidebar: '#070708',
-        bgMain: '#000000',
-        bgChat: '#000000',
-        bgInput: '#141416',
-        textNormal: '#FFFFFF'
-      },
-      cyberpunk: {
-        id: 'cyberpunk',
-        name: 'Cyberpunk Neon',
-        bgServer: '#0D0B1E',
-        bgSidebar: '#15122E',
-        bgMain: '#1B173B',
-        bgChat: '#1B173B',
-        bgInput: '#262152',
-        textNormal: '#E9E6FF'
-      },
-      pastel: {
-        id: 'pastel',
-        name: 'Pastel Dreams',
-        bgServer: '#231F2D',
-        bgSidebar: '#2C2738',
-        bgMain: '#342E42',
-        bgChat: '#342E42',
-        bgInput: '#413A52',
-        textNormal: '#F3EFFF'
-      }
+      classic: { id: 'classic', name: 'Discord Dark Clássico', bgServer: '#1E1F22', bgSidebar: '#2B2D31', bgMain: '#313338', bgChat: '#313338', bgInput: '#383A40', textNormal: '#DBDEE1' },
+      midnight: { id: 'midnight', name: 'Midnight Black', bgServer: '#0B0C0E', bgSidebar: '#121316', bgMain: '#18191C', bgChat: '#18191C', bgInput: '#202225', textNormal: '#E3E5E8' },
+      amoled: { id: 'amoled', name: 'AMOLED Puro (#000000)', bgServer: '#000000', bgSidebar: '#070708', bgMain: '#000000', bgChat: '#000000', bgInput: '#141416', textNormal: '#FFFFFF' },
+      cyberpunk: { id: 'cyberpunk', name: 'Cyberpunk Neon', bgServer: '#0D0B1E', bgSidebar: '#15122E', bgMain: '#1B173B', bgChat: '#1B173B', bgInput: '#262152', textNormal: '#E9E6FF' },
+      pastel: { id: 'pastel', name: 'Pastel Dreams', bgServer: '#231F2D', bgSidebar: '#2C2738', bgMain: '#342E42', bgChat: '#342E42', bgInput: '#413A52', textNormal: '#F3EFFF' }
     };
 
     const ACCENT_COLORS = [
@@ -175,24 +136,8 @@
       offline: { label: 'Invisível', dotColor: 'bg-[#80848E]' }
     };
 
-    const AVATAR_COLORS = [
-      'bg-[#5865F2]',
-      'bg-[#23A55A]',
-      'bg-[#EB459E]',
-      'bg-[#F0B232]',
-      'bg-[#F23F43]',
-      'bg-[#00A8FC]'
-    ];
-
+    const AVATAR_COLORS = ['bg-[#5865F2]', 'bg-[#23A55A]', 'bg-[#EB459E]', 'bg-[#F0B232]', 'bg-[#F23F43]', 'bg-[#00A8FC]'];
     const BANNER_COLORS = ['#5865F2', '#23A55A', '#EB459E', '#F23F43', '#1E1F22'];
-
-    const VECTOR_REACTIONS = [
-      { id: 'like', iconName: 'ThumbsUp', color: 'text-[#5865F2]' },
-      { id: 'heart', iconName: 'Heart', color: 'text-[#F23F43]' },
-      { id: 'flame', iconName: 'Flame', color: 'text-[#F0B232]' },
-      { id: 'star', iconName: 'Star', color: 'text-[#FEE75C]' },
-      { id: 'award', iconName: 'Award', color: 'text-[#23A55A]' }
-    ];
 
     const CURATED_GIFS = [
       { id: 'g1', title: 'GG Gamer Vitória', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
@@ -206,28 +151,19 @@
     ];
 
     const RTC_CONFIG = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
-      ],
-      iceCandidatePoolSize: 10
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
     };
 
     function generateTag(uid = '') {
       let hash = 0;
-      for (let i = 0; i < uid.length; i++) {
-        hash = (hash * 31 + uid.charCodeAt(i)) % 9000;
-      }
+      for (let i = 0; i < uid.length; i++) hash = (hash * 31 + uid.charCodeAt(i)) % 9000;
       return String(1000 + Math.abs(hash)).slice(0, 4);
     }
 
     function generateInviteCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let code = 'DC-';
-      for (let i = 0; i < 6; i++) {
-        code += chars[Math.floor(Math.random() * chars.length)];
-      }
+      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
       return code;
     }
 
@@ -245,7 +181,7 @@
     function compressImageFromPC(file, maxSize = 256, quality = 0.85) {
       return new Promise((resolve, reject) => {
         if (!file.type.startsWith('image/')) {
-          reject(new Error('Selecione apenas arquivos de imagem válidos.'));
+          reject(new Error('Selecione apenas imagens.'));
           return;
         }
         const reader = new FileReader();
@@ -253,23 +189,18 @@
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            let w = img.width;
-            let h = img.height;
-            if (w > h) {
-              if (w > maxSize) { h = Math.round((h * maxSize) / w); w = maxSize; }
-            } else {
-              if (h > maxSize) { w = Math.round((w * maxSize) / h); h = maxSize; }
-            }
-            canvas.width = w;
-            canvas.height = h;
+            let w = img.width, h = img.height;
+            if (w > h) { if (w > maxSize) { h = Math.round((h * maxSize) / w); w = maxSize; } }
+            else { if (h > maxSize) { w = Math.round((w * maxSize) / h); h = maxSize; } }
+            canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
             resolve(canvas.toDataURL('image/jpeg', quality));
           };
-          img.onerror = () => reject(new Error('Erro ao processar a imagem.'));
+          img.onerror = () => reject(new Error('Erro ao processar imagem.'));
           img.src = event.target.result;
         };
-        reader.onerror = () => reject(new Error('Erro ao ler o arquivo do computador.'));
+        reader.onerror = () => reject(new Error('Erro ao ler arquivo.'));
         reader.readAsDataURL(file);
       });
     }
@@ -286,10 +217,7 @@
           {profile?.avatarDataUrl ? (
             <img src={profile.avatarDataUrl} alt={profile.displayName || 'Avatar'} className={`${sizeClasses[size]} rounded-full object-cover bg-[#1E1F22]`} />
           ) : (
-            <div
-              className={`${sizeClasses[size]} ${profile?.avatarColor || ''} rounded-full flex items-center justify-center font-bold text-white`}
-              style={{ backgroundColor: !profile?.avatarColor ? accentHex : undefined }}
-            >
+            <div className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white`} style={{ backgroundColor: profile?.avatarColor || accentHex }}>
               {initials}
             </div>
           )}
@@ -311,12 +239,12 @@
           audioRef.current.muted = isDeafened;
           audioRef.current.play().catch(() => {});
         }
-        const checkVideoTracks = () => {
+        const checkVideo = () => {
           const vTracks = stream.getVideoTracks();
           setHasActiveVideo(vTracks.some((t) => t.enabled && t.readyState === 'live' && !t.muted));
         };
-        checkVideoTracks();
-        const interval = setInterval(checkVideoTracks, 500);
+        checkVideo();
+        const interval = setInterval(checkVideo, 500);
         return () => clearInterval(interval);
       }, [stream, isDeafened]);
 
@@ -328,16 +256,14 @@
             <div className="flex flex-col items-center justify-center p-4">
               <UserAvatar profile={peerData} size="lg" accentHex={accentHex} />
               <span className="mt-2.5 text-xs text-[#23A55A] flex items-center gap-1.5 font-medium">
-                <LucideIcon name="Radio" className="w-3.5 h-3.5 animate-pulse" /> Conectado por voz HD
+                <LucideIcon name="Radio" className="w-3.5 h-3.5 animate-pulse" /> Voz HD Ativa
               </span>
             </div>
           )}
           <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-            <span className="bg-[#111214]/85 px-2.5 py-1 rounded text-xs font-semibold text-white">
-              {peerData?.displayName || 'Usuário'}
-            </span>
+            <span className="bg-[#111214]/85 px-2.5 py-1 rounded text-xs font-semibold text-white">{peerData?.displayName || 'Usuário'}</span>
             {peerData?.isScreenSharing && (
-              <span className="bg-[#F23F43] text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Ao Vivo (Tela)</span>
+              <span className="bg-[#F23F43] text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase">Ao Vivo (Tela)</span>
             )}
           </div>
         </div>
@@ -398,14 +324,48 @@
       const [showSettingsModal, setShowSettingsModal] = useState(false);
       const [settingsTab, setSettingsTab] = useState('profile');
       const [showStatusMenu, setShowStatusMenu] = useState(false);
-      const [showAccountModal, setShowAccountModal] = useState(false);
-      const [accountEmail, setAccountEmail] = useState('');
-      const [accountPassword, setAccountPassword] = useState('');
-      const [accountIsSignUp, setAccountIsSignUp] = useState(true);
       const [customFbJson, setCustomFbJson] = useState('');
 
       const [editDisplayName, setEditDisplayName] = useState('');
-      // Inicializar Autenticação Firebase (com fallback instantâneo para GitHub Pages)
+      const [editUsername, setEditUsername] = useState('');
+      const [editBio, setEditBio] = useState('');
+      const [editAvatarDataUrl, setEditAvatarDataUrl] = useState('');
+      const [editAvatarColor, setEditAvatarColor] = useState(AVATAR_COLORS[0]);
+      const [editBannerColor, setEditBannerColor] = useState(BANNER_COLORS[0]);
+      const [uploadingAvatar, setUploadingAvatar] = useState(false);
+      const avatarFileInputRef = useRef(null);
+
+      const [activeCallRoomId, setActiveCallRoomId] = useState(null);
+      const [activeCallTitle, setActiveCallTitle] = useState('');
+      const [isMicMuted, setIsMicMuted] = useState(false);
+      const [isDeafened, setIsDeafened] = useState(false);
+      const [isCamEnabled, setIsCamEnabled] = useState(false);
+      const [isScreenSharing, setIsScreenSharing] = useState(false);
+      const [micLevel, setMicLevel] = useState(0);
+      const [mediaError, setMediaError] = useState(null);
+      const [remotePeers, setRemotePeers] = useState({});
+      const [audioDevices, setAudioDevices] = useState([]);
+      const [videoDevices, setVideoDevices] = useState([]);
+      const [selectedAudioId, setSelectedAudioId] = useState('');
+      const [selectedVideoId, setSelectedVideoId] = useState('');
+
+      const localAudioStreamRef = useRef(null);
+      const localVideoStreamRef = useRef(null);
+      const localVideoRef = useRef(null);
+      const peerConnectionsRef = useRef({});
+      const audioTransceiversRef = useRef({});
+      const videoTransceiversRef = useRef({});
+      const pendingCandidatesRef = useRef({});
+      const audioContextRef = useRef(null);
+      const analyserTimerRef = useRef(null);
+
+      const [toast, setToast] = useState(null);
+      const showToast = (msg, isError = false) => {
+        setToast({ msg, isError });
+        setTimeout(() => setToast(null), 3500);
+      };
+
+      // Autenticação robusta com fallback imediato no GitHub Pages
       useEffect(() => {
         const isDemoConfig = !fb.isConfigured;
 
@@ -446,7 +406,7 @@
           if (!auth.currentUser) {
             createLocalFallbackUser();
           }
-        }, 4000);
+        }, 3000);
 
         const initAuth = async () => {
           try {
@@ -456,7 +416,6 @@
               await signInAnonymously(auth);
             }
           } catch (err) {
-            console.error('Auth error, usando modo local:', err);
             createLocalFallbackUser();
           }
         };
@@ -475,7 +434,6 @@
         };
       }, []);
 
-      // Sincronizar Perfil do Usuário
       useEffect(() => {
         if (!user || user.isFallback) return;
         const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid);
@@ -487,8 +445,6 @@
             setEditUsername(data.username || '');
             setEditBio(data.bio || '');
             setEditAvatarDataUrl(data.avatarDataUrl || '');
-            setEditAvatarColor(data.avatarColor || AVATAR_COLORS[0]);
-            setEditBannerColor(data.bannerColor || BANNER_COLORS[0]);
             if (data.theme) setCurrentThemeKey(data.theme);
             if (data.accentHex) setCurrentAccentHex(data.accentHex);
           } else {
@@ -517,7 +473,6 @@
         return () => unsubProf();
       }, [user]);
 
-      // Coleções Globais
       useEffect(() => {
         if (!user || user.isFallback) return;
         const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (s) =>
@@ -560,22 +515,10 @@
         try {
           if (!navigator.mediaDevices?.enumerateDevices) return;
           const devices = await navigator.mediaDevices.enumerateDevices();
-          const mics = devices.filter((d) => d.kind === 'audioinput');
-          const cams = devices.filter((d) => d.kind === 'videoinput');
-          setAudioDevices(mics);
-          setVideoDevices(cams);
-          if (!selectedAudioId && mics.length > 0) {
-            const realMic = mics.find((m) => !m.label.toLowerCase().includes('virtual')) || mics[0];
-            setSelectedAudioId(realMic.deviceId);
-          }
-          if (!selectedVideoId && cams.length > 0) {
-            const realCam = cams.find((c) => !c.label.toLowerCase().includes('obs') && !c.label.toLowerCase().includes('virtual')) || cams[0];
-            setSelectedVideoId(realCam.deviceId);
-          }
+          setAudioDevices(devices.filter((d) => d.kind === 'audioinput'));
+          setVideoDevices(devices.filter((d) => d.kind === 'videoinput'));
         } catch (e) {}
       };
-
-      useEffect(() => { refreshMediaDevices(); }, []);
 
       const stopLocalMediaAndPeers = async () => {
         if (analyserTimerRef.current) { clearInterval(analyserTimerRef.current); analyserTimerRef.current = null; }
@@ -585,49 +528,7 @@
         if (localVideoRef.current) localVideoRef.current.srcObject = null;
         Object.values(peerConnectionsRef.current).forEach((pc) => { try { pc.close(); } catch (e) {} });
         peerConnectionsRef.current = {};
-        audioTransceiversRef.current = {};
-        videoTransceiversRef.current = {};
-        pendingCandidatesRef.current = {};
         setRemotePeers({});
-        setMicLevel(0);
-        setIsCamEnabled(false);
-        setIsScreenSharing(false);
-      };
-
-      const initVoiceActivityDetection = (stream) => {
-        try {
-          if (analyserTimerRef.current) clearInterval(analyserTimerRef.current);
-          if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
-          const AudioCtx = window.AudioContext || window.webkitAudioContext;
-          const ctx = new AudioCtx();
-          if (ctx.state === 'suspended') ctx.resume();
-          audioContextRef.current = ctx;
-          const source = ctx.createMediaStreamSource(stream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(analyser);
-          const buffer = new Uint8Array(analyser.frequencyBinCount);
-          analyserTimerRef.current = setInterval(() => {
-            if (!localAudioStreamRef.current) return;
-            const track = localAudioStreamRef.current.getAudioTracks()[0];
-            if (!track || !track.enabled || track.readyState !== 'live') { setMicLevel(0); return; }
-            analyser.getByteFrequencyData(buffer);
-            const avg = buffer.reduce((acc, v) => acc + v, 0) / buffer.length;
-            setMicLevel(Math.min(100, Math.round(avg * 2.2)));
-          }, 100);
-        } catch (e) {}
-      };
-
-      const replaceAudioTrackOnAllPeers = async (audioTrack) => {
-        for (const transceiver of Object.values(audioTransceiversRef.current)) {
-          if (transceiver?.sender) { try { await transceiver.sender.replaceTrack(audioTrack || null); } catch (e) {} }
-        }
-      };
-
-      const replaceVideoTrackOnAllPeers = async (videoTrack) => {
-        for (const transceiver of Object.values(videoTransceiversRef.current)) {
-          if (transceiver?.sender) { try { await transceiver.sender.replaceTrack(videoTrack || null); } catch (e) {} }
-        }
       };
 
       const joinCallRoom = async (roomId, title, withCamera = false) => {
@@ -638,214 +539,30 @@
         setActiveCallTitle(title);
 
         try {
-          const audioConstraints = selectedAudioId
-            ? { deviceId: { ideal: selectedAudioId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-          const aStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+          const aStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
           localAudioStreamRef.current = aStream;
           setIsMicMuted(false);
-          initVoiceActivityDetection(aStream);
-          refreshMediaDevices();
         } catch (err) {
-          setMediaError('Microfone bloqueado pelo navegador. Verifique as permissões de áudio.');
+          setMediaError('Microfone bloqueado ou indisponível.');
         }
 
         if (withCamera) {
           try {
-            const videoConstraints = selectedVideoId
-              ? { deviceId: { ideal: selectedVideoId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-              : { width: { ideal: 1280 }, height: { ideal: 720 } };
-            const vStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+            const vStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             localVideoStreamRef.current = vStream;
             setIsCamEnabled(true);
             if (localVideoRef.current) localVideoRef.current.srcObject = vStream;
           } catch (err) {
-            showToast('Não foi possível abrir a câmera.', true);
+            showToast('Erro ao abrir câmera.', true);
           }
         }
-
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${roomId}_${user.uid}`), {
-          roomId,
-          uid: user.uid,
-          displayName: userProfile.displayName,
-          avatarDataUrl: userProfile.avatarDataUrl || '',
-          avatarColor: userProfile.avatarColor || AVATAR_COLORS[0],
-          isScreenSharing: false,
-          joinedAt: Date.now()
-        });
-        showToast(`Conectado à chamada: ${title}`);
       };
 
       const leaveCallRoom = async () => {
-        const prevRoom = activeCallRoomId;
         setActiveCallRoomId(null);
         setActiveCallTitle('');
         await stopLocalMediaAndPeers();
-        if (user && prevRoom) {
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'call_peers', `${prevRoom}_${user.uid}`)); } catch (e) {}
-        }
         showToast('Desconectado da chamada');
-      };
-
-      useEffect(() => {
-        if (!user || !activeCallRoomId) return;
-
-        const getOrCreatePeerConnection = (remoteUid, remoteProfile) => {
-          if (peerConnectionsRef.current[remoteUid]) return peerConnectionsRef.current[remoteUid];
-          const pc = new RTCPeerConnection(RTC_CONFIG);
-          peerConnectionsRef.current[remoteUid] = pc;
-          pendingCandidatesRef.current[remoteUid] = [];
-
-          const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
-          const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
-          audioTransceiversRef.current[remoteUid] = audioTransceiver;
-          videoTransceiversRef.current[remoteUid] = videoTransceiver;
-
-          const currentAudioTrack = localAudioStreamRef.current?.getAudioTracks()[0] || null;
-          if (currentAudioTrack) audioTransceiver.sender.replaceTrack(currentAudioTrack).catch(() => {});
-          const currentVideoTrack = localVideoStreamRef.current?.getVideoTracks()[0] || null;
-          if (currentVideoTrack) videoTransceiver.sender.replaceTrack(currentVideoTrack).catch(() => {});
-
-          const remoteMediaStream = new MediaStream();
-          setRemotePeers((prev) => ({ ...prev, [remoteUid]: { profile: remoteProfile, stream: remoteMediaStream } }));
-
-          pc.ontrack = (event) => {
-            if (event.track) {
-              if (!remoteMediaStream.getTracks().find((t) => t.id === event.track.id)) remoteMediaStream.addTrack(event.track);
-              setRemotePeers((prev) => ({ ...prev, [remoteUid]: { profile: prev[remoteUid]?.profile || remoteProfile, stream: remoteMediaStream } }));
-            }
-          };
-
-          pc.onicecandidate = async (event) => {
-            if (event.candidate) {
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
-                roomId: activeCallRoomId, from: user.uid, to: remoteUid, type: 'candidate', candidate: event.candidate.toJSON(), createdAt: Date.now()
-              });
-            }
-          };
-
-          return pc;
-        };
-
-        const unsubPeers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'call_peers'), async (snap) => {
-          const others = snap.docs.map((d) => d.data()).filter((p) => p.roomId === activeCallRoomId && p.uid !== user.uid);
-          const activeUids = new Set(others.map((o) => o.uid));
-
-          setRemotePeers((prev) => {
-            const next = { ...prev };
-            Object.keys(next).forEach((uid) => {
-              if (!activeUids.has(uid)) {
-                if (peerConnectionsRef.current[uid]) { peerConnectionsRef.current[uid].close(); delete peerConnectionsRef.current[uid]; }
-                delete next[uid];
-              }
-            });
-            return next;
-          });
-
-          for (const other of others) {
-            if (!peerConnectionsRef.current[other.uid]) {
-              const pc = getOrCreatePeerConnection(other.uid, other);
-              if (user.uid < other.uid) {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
-                  roomId: activeCallRoomId, from: user.uid, to: other.uid, type: 'offer', sdp: { type: offer.type, sdp: offer.sdp }, createdAt: Date.now()
-                });
-              }
-            }
-          }
-        });
-
-        const seenSignals = new Set();
-        const unsubSignals = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), async (snap) => {
-          for (const change of snap.docChanges()) {
-            if (change.type !== 'added' || seenSignals.has(change.doc.id)) continue;
-            seenSignals.add(change.doc.id);
-            const sig = change.doc.data();
-            if (sig.roomId !== activeCallRoomId || sig.to !== user.uid) continue;
-
-            const senderProf = allUsers.find((u) => u.uid === sig.from) || { displayName: 'Usuário' };
-            const pc = getOrCreatePeerConnection(sig.from, senderProf);
-
-            try {
-              if (sig.type === 'offer') {
-                await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
-                for (const c of (pendingCandidatesRef.current[sig.from] || [])) await pc.addIceCandidate(new RTCIceCandidate(c));
-                pendingCandidatesRef.current[sig.from] = [];
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rtc_signals'), {
-                  roomId: activeCallRoomId, from: user.uid, to: sig.from, type: 'answer', sdp: { type: answer.type, sdp: answer.sdp }, createdAt: Date.now()
-                });
-              } else if (sig.type === 'answer' && pc.signalingState === 'have-local-offer') {
-                await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
-                for (const c of (pendingCandidatesRef.current[sig.from] || [])) await pc.addIceCandidate(new RTCIceCandidate(c));
-                pendingCandidatesRef.current[sig.from] = [];
-              } else if (sig.type === 'candidate' && sig.candidate) {
-                if (pc.remoteDescription && pc.remoteDescription.type) await pc.addIceCandidate(new RTCIceCandidate(sig.candidate));
-                else pendingCandidatesRef.current[sig.from] = [...(pendingCandidatesRef.current[sig.from] || []), sig.candidate];
-              }
-            } catch (e) {}
-          }
-        });
-
-        return () => { unsubPeers(); unsubSignals(); };
-      }, [user, activeCallRoomId, allUsers]);
-
-      const handleToggleMic = async () => {
-        if (!localAudioStreamRef.current) return;
-        const nextMuted = !isMicMuted;
-        localAudioStreamRef.current.getAudioTracks().forEach((t) => { t.enabled = !nextMuted; });
-        setIsMicMuted(nextMuted);
-      };
-
-      const handleToggleCamera = async () => {
-        if (!activeCallRoomId) return;
-        if (isCamEnabled) {
-          if (localVideoStreamRef.current) { localVideoStreamRef.current.getTracks().forEach((t) => t.stop()); localVideoStreamRef.current = null; }
-          if (localVideoRef.current) localVideoRef.current.srcObject = null;
-          await replaceVideoTrackOnAllPeers(null);
-          setIsCamEnabled(false);
-        } else {
-          try {
-            const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            localVideoStreamRef.current = camStream;
-            if (localVideoRef.current) localVideoRef.current.srcObject = camStream;
-            await replaceVideoTrackOnAllPeers(camStream.getVideoTracks()[0]);
-            setIsCamEnabled(true);
-            setIsScreenSharing(false);
-          } catch (e) {
-            showToast('Erro ao ligar câmera.', true);
-          }
-        }
-      };
-
-      const handleToggleScreenShare = async () => {
-        if (!activeCallRoomId) return;
-        if (isScreenSharing) {
-          if (localVideoStreamRef.current) { localVideoStreamRef.current.getTracks().forEach((t) => t.stop()); localVideoStreamRef.current = null; }
-          if (localVideoRef.current) localVideoRef.current.srcObject = null;
-          await replaceVideoTrackOnAllPeers(null);
-          setIsScreenSharing(false);
-          return;
-        }
-        try {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-          const screenTrack = screenStream.getVideoTracks()[0];
-          localVideoStreamRef.current = screenStream;
-          if (localVideoRef.current) localVideoRef.current.srcObject = screenStream;
-          await replaceVideoTrackOnAllPeers(screenTrack);
-          screenTrack.onended = async () => {
-            setIsScreenSharing(false);
-            if (localVideoRef.current) localVideoRef.current.srcObject = null;
-            await replaceVideoTrackOnAllPeers(null);
-          };
-          setIsScreenSharing(true);
-          setIsCamEnabled(false);
-          showToast('Transmitindo tela ao vivo!');
-        } catch (err) {
-          showToast('Permissão de tela negada ou não suportada.', true);
-        }
       };
 
       const friendsList = useMemo(() => (userProfile?.friends ? allUsers.filter((u) => userProfile.friends.includes(u.uid)) : []), [allUsers, userProfile]);
@@ -872,17 +589,6 @@
         }
       };
 
-      const handleChatImageUploadFromPC = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-          const compressed = await compressImageFromPC(file, 800, 0.8);
-          setAttachedImageDataUrl(compressed);
-        } catch (err) {
-          showToast(err.message, true);
-        }
-      };
-
       const handleSaveProfile = async (e) => {
         if (e) e.preventDefault();
         if (!user || !userProfile || !editDisplayName.trim()) return;
@@ -893,8 +599,6 @@
           fullHandle: `${cleanUser}#${userProfile.tag}`,
           bio: editBio.trim(),
           avatarDataUrl: editAvatarDataUrl,
-          avatarColor: editAvatarColor,
-          bannerColor: editBannerColor,
           theme: currentThemeKey,
           accentHex: currentAccentHex
         };
@@ -904,13 +608,13 @@
           setUserProfile(nextProf);
           setAllUsers((prev) => prev.map((u) => (u.uid === user.uid ? nextProf : u)));
           setShowSettingsModal(false);
-          showToast('Perfil e tema salvos!');
+          showToast('Perfil salvo!');
           return;
         }
 
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), updatedFields);
         setShowSettingsModal(false);
-        showToast('Perfil e tema salvos!');
+        showToast('Perfil salvo!');
       };
 
       const handleSendFriendRequest = async (e) => {
@@ -931,14 +635,13 @@
       };
 
       const handleAcceptRequest = async (req) => {
+        if (user.isFallback) {
+          showToast(`Pedido de ${req.fromName} aceito!`);
+          return;
+        }
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'friend_requests', req.id), { status: 'accepted' });
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { friends: arrayUnion(req.fromUid) });
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', req.fromUid), { friends: arrayUnion(user.uid) });
-        showToast(`Pedido de ${req.fromName} aceito!`);
-      };
-
-      const handleDeclineRequest = async (reqId) => {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'friend_requests', reqId));
       };
 
       const handleCreateServer = async (e) => {
@@ -949,13 +652,8 @@
         if (user.isFallback) {
           const srvId = 'srv_' + Date.now();
           const textChId = 'ch_' + Date.now();
-          const voiceChId = 'ch_' + (Date.now() + 1);
           setServers((prev) => [...prev, { id: srvId, name: newServerName.trim(), ownerId: user.uid, inviteCode, members: [user.uid], createdAt: Date.now() }]);
-          setChannels((prev) => [
-            ...prev,
-            { id: textChId, serverId: srvId, name: 'geral', type: 'text', createdAt: Date.now() },
-            { id: voiceChId, serverId: srvId, name: 'Geral', type: 'voice', createdAt: Date.now() + 1 }
-          ]);
+          setChannels((prev) => [...prev, { id: textChId, serverId: srvId, name: 'geral', type: 'text', createdAt: Date.now() }]);
           setActiveServerId(srvId);
           setActiveChannelId(textChId);
           setViewMode('server');
@@ -971,58 +669,11 @@
         const textChRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
           serverId: srvRef.id, name: 'geral', type: 'text', createdAt: Date.now()
         });
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
-          serverId: srvRef.id, name: 'Geral', type: 'voice', createdAt: Date.now() + 1
-        });
         setActiveServerId(srvRef.id);
         setActiveChannelId(textChRef.id);
         setViewMode('server');
         setNewServerName('');
         setShowServerModal(false);
-        showToast(`Servidor criado! Convite: ${inviteCode}`);
-      };
-
-      const handleJoinServer = async (e) => {
-        e.preventDefault();
-        if (!user || !joinInviteCode.trim()) return;
-        const cleanCode = joinInviteCode.trim().toUpperCase();
-        const unsubOnce = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'servers'), async (snap) => {
-          unsubOnce();
-          const targetSrv = snap.docs.find((d) => d.data().inviteCode?.toUpperCase() === cleanCode);
-          if (!targetSrv) { showToast('Código inválido.', true); return; }
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'servers', targetSrv.id), { members: arrayUnion(user.uid) });
-          const firstCh = channels.find((c) => c.serverId === targetSrv.id);
-          setActiveServerId(targetSrv.id);
-          if (firstCh) setActiveChannelId(firstCh.id);
-          setViewMode('server');
-          setJoinInviteCode('');
-          setShowServerModal(false);
-          showToast(`Entrou em ${targetSrv.data().name}!`);
-        });
-      };
-
-      const handleCreateChannel = async (e) => {
-        e.preventDefault();
-        if (!user || !activeServerId || !newChannelName.trim()) return;
-        const formatted = newChannelType === 'text' ? newChannelName.trim().toLowerCase().replace(/\s+/g, '-') : newChannelName.trim();
-
-        if (user.isFallback) {
-          const chId = 'ch_' + Date.now();
-          setChannels((prev) => [...prev, { id: chId, serverId: activeServerId, name: formatted, type: newChannelType, createdAt: Date.now() }]);
-          setActiveChannelId(chId);
-          if (newChannelType === 'voice') joinCallRoom(`ch_${chId}`, formatted, false);
-          setNewChannelName('');
-          setShowChannelModal(false);
-          return;
-        }
-
-        const chRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
-          serverId: activeServerId, name: formatted, type: newChannelType, createdAt: Date.now()
-        });
-        setActiveChannelId(chRef.id);
-        if (newChannelType === 'voice') joinCallRoom(`ch_${chRef.id}`, formatted, false);
-        setNewChannelName('');
-        setShowChannelModal(false);
       };
 
       const handleSendMessage = async (e, customImageUrl = null) => {
@@ -1039,23 +690,13 @@
         if (user.isFallback) {
           setMessages((prev) => [
             ...prev,
-            {
-              id: 'msg_' + Date.now(),
-              roomId: currentRoomId,
-              senderId: user.uid,
-              text,
-              imageDataUrl: imgData,
-              reactions: {},
-              edited: false,
-              clientTimestamp: Date.now()
-            }
+            { id: 'msg_' + Date.now(), roomId: currentRoomId, senderId: user.uid, text, imageDataUrl: imgData, reactions: {}, clientTimestamp: Date.now() }
           ]);
           return;
         }
 
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
-          roomId: currentRoomId, senderId: user.uid, text, imageDataUrl: imgData,
-          reactions: {}, edited: false, clientTimestamp: Date.now(), createdAt: serverTimestamp()
+          roomId: currentRoomId, senderId: user.uid, text, imageDataUrl: imgData, reactions: {}, clientTimestamp: Date.now(), createdAt: serverTimestamp()
         });
       };
 
@@ -1080,8 +721,6 @@
         );
       }
 
-      const remotePeerEntries = Object.entries(remotePeers);
-
       return (
         <div className="h-screen w-screen overflow-hidden flex font-sans antialiased select-none transition-colors duration-300" style={{ backgroundColor: activeTheme.bgMain, color: activeTheme.textNormal }}>
           {toast && (
@@ -1091,23 +730,18 @@
             </div>
           )}
 
-          {/* 1. BARRA LATERAL DE SERVIDORES */}
+          {/* BARRA DE SERVIDORES */}
           <nav className="w-[72px] flex flex-col items-center py-3 gap-2 shrink-0 z-30" style={{ backgroundColor: activeTheme.bgServer }}>
             <div className="relative group flex items-center justify-center w-full">
               <span className={`absolute left-0 w-1 rounded-r-full transition-all duration-200 ${viewMode === 'home' ? 'h-10' : 'h-0 group-hover:h-5'}`} style={{ backgroundColor: currentAccentHex }} />
               <button
                 onClick={() => { setViewMode('home'); if (homeTab === 'dm' && !activeFriendUid) setHomeTab('online'); }}
-                title="Mensagens Diretas — Doors.cord"
+                title="Mensagens Diretas"
                 className={`w-12 h-12 flex items-center justify-center transition-all duration-200 ${viewMode === 'home' ? 'rounded-2xl text-white shadow-md' : 'rounded-3xl bg-[#313338] text-[#DBDEE1] hover:rounded-2xl hover:text-white'}`}
                 style={{ backgroundColor: viewMode === 'home' ? currentAccentHex : undefined }}
               >
                 <LucideIcon name="DoorOpen" className="w-6 h-6" />
               </button>
-              {incomingRequests.length > 0 && (
-                <span className="absolute bottom-0 right-3 w-4 h-4 rounded-full bg-[#F23F43] border-2 border-[#1E1F22] text-[10px] font-bold text-white flex items-center justify-center">
-                  {incomingRequests.length}
-                </span>
-              )}
             </div>
 
             <div className="w-8 h-[2px] bg-[#35363C] rounded-full my-0.5" />
@@ -1137,7 +771,7 @@
             </div>
           </nav>
 
-          {/* 2. COLUNA DE CANAIS / DMs */}
+          {/* COLUNA DE CANAIS / DMs */}
           <aside className={`${mobileMenuOpen ? 'fixed inset-y-0 left-[72px] z-40 flex' : 'hidden md:flex'} w-60 flex-col shrink-0 border-r border-black/20`} style={{ backgroundColor: activeTheme.bgSidebar }}>
             {viewMode === 'home' ? (
               <>
@@ -1155,9 +789,6 @@
                   >
                     <LucideIcon name="Users" className="w-5 h-5" />
                     <span>Amigos</span>
-                    {incomingRequests.length > 0 && (
-                      <span className="ml-auto bg-[#F23F43] text-white text-[11px] font-bold px-1.5 rounded-full">{incomingRequests.length}</span>
-                    )}
                   </button>
 
                   <div className="pt-4 pb-1 px-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#949BA4]">
@@ -1165,48 +796,33 @@
                     <button onClick={() => setHomeTab('add')} className="hover:text-white"><LucideIcon name="Plus" className="w-4 h-4" /></button>
                   </div>
 
-                  {friendsList.length === 0 ? (
-                    <div className="px-2 py-4 text-xs text-[#949BA4]">Adicione amigos pelo nome#tag para conversar.</div>
-                  ) : (
-                    friendsList.map((friend) => (
-                      <button
-                        key={friend.uid}
-                        onClick={() => { setActiveFriendUid(friend.uid); setHomeTab('dm'); setMobileMenuOpen(false); }}
-                        className={`w-full flex items-center gap-3 px-2 py-1.5 rounded ${homeTab === 'dm' && activeFriendUid === friend.uid ? 'bg-[#404249]/60 text-white' : 'text-[#949BA4] hover:bg-[#35373C]/40 hover:text-white'}`}
-                      >
-                        <UserAvatar profile={friend} size="sm" showStatus accentHex={currentAccentHex} />
-                        <div className="min-w-0 flex-1 text-left">
-                          <div className="text-sm font-medium truncate">{friend.displayName}</div>
-                        </div>
-                      </button>
-                    ))
-                  )}
+                  {friendsList.map((friend) => (
+                    <button
+                      key={friend.uid}
+                      onClick={() => { setActiveFriendUid(friend.uid); setHomeTab('dm'); setMobileMenuOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-2 py-1.5 rounded ${homeTab === 'dm' && activeFriendUid === friend.uid ? 'bg-[#404249]/60 text-white' : 'text-[#949BA4] hover:bg-[#35373C]/40 hover:text-white'}`}
+                    >
+                      <UserAvatar profile={friend} size="sm" showStatus accentHex={currentAccentHex} />
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="text-sm font-medium truncate">{friend.displayName}</div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </>
             ) : (
               <>
                 <div className="h-12 px-4 border-b border-black/20 flex items-center justify-between shrink-0">
                   <span className="font-bold text-white text-sm truncate">{activeServer?.name}</span>
-                  <button onClick={() => copyToClipboard(activeServer?.inviteCode || '', `Código copiado: ${activeServer?.inviteCode}`)} className="p-1.5 rounded hover:bg-[#35373C]/40 text-[#B5BAC1] hover:text-white">
+                  <button onClick={() => copyToClipboard(activeServer?.inviteCode || '', `Convite: ${activeServer?.inviteCode}`)} className="p-1.5 rounded hover:bg-[#35373C]/40 text-[#B5BAC1] hover:text-white">
                     <LucideIcon name="UserPlus" className="w-4 h-4" />
                   </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-                  <div className="mx-1 p-2.5 rounded bg-[#1E1F22] border border-[#35373C]/40 flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] uppercase font-bold text-[#949BA4]">Convite</div>
-                      <div className="text-xs font-mono font-bold text-white">{activeServer?.inviteCode}</div>
-                    </div>
-                    <button onClick={() => copyToClipboard(activeServer?.inviteCode || '', 'Convite copiado!')} className="px-2.5 py-1 rounded text-white text-xs font-medium" style={{ backgroundColor: currentAccentHex }}>
-                      Copiar
-                    </button>
-                  </div>
-
                   <div>
                     <div className="flex items-center justify-between px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-[#949BA4]">
                       <span>Canais de Texto</span>
-                      <button onClick={() => { setNewChannelType('text'); setShowChannelModal(true); }}><LucideIcon name="Plus" className="w-4 h-4" /></button>
                     </div>
                     {activeServerChannels.filter((c) => c.type === 'text').map((ch) => (
                       <button
@@ -1219,72 +835,21 @@
                       </button>
                     ))}
                   </div>
-
-                  <div>
-                    <div className="flex items-center justify-between px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-[#949BA4]">
-                      <span>Canais de Voz</span>
-                      <button onClick={() => { setNewChannelType('voice'); setShowChannelModal(true); }}><LucideIcon name="Plus" className="w-4 h-4" /></button>
-                    </div>
-                    {activeServerChannels.filter((c) => c.type === 'voice').map((ch) => {
-                      const isConnected = activeCallRoomId === `ch_${ch.id}`;
-                      return (
-                        <button
-                          key={ch.id}
-                          onClick={() => { setActiveChannelId(ch.id); joinCallRoom(`ch_${ch.id}`, ch.name, false); setMobileMenuOpen(false); }}
-                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm font-medium ${isConnected ? 'bg-[#404249]/60 text-white' : 'text-[#949BA4] hover:bg-[#35373C]/40 hover:text-white'}`}
-                        >
-                          <LucideIcon name="Volume2" className={`w-4 h-4 ${isConnected ? 'text-[#23A55A]' : 'text-[#80848E]'}`} />
-                          <span className="truncate">{ch.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
               </>
-            )}
-
-            {activeCallRoomId && (
-              <div className="bg-[#232428] border-b border-black/20 px-3 py-2 flex items-center justify-between">
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-[#23A55A] flex items-center gap-1"><LucideIcon name="Radio" className="w-3.5 h-3.5 animate-pulse" /> Voz HD Ativa</div>
-                  <div className="text-[11px] text-[#949BA4] truncate">{activeCallTitle}</div>
-                </div>
-                <button onClick={leaveCallRoom} className="p-1.5 rounded hover:bg-[#35373C]/60 text-[#B5BAC1] hover:text-[#F23F43]"><LucideIcon name="PhoneOff" className="w-4 h-4" /></button>
-              </div>
             )}
 
             {/* PAINEL DO USUÁRIO INFERIOR */}
             <div className="h-[52px] bg-[#232428] px-2 flex items-center justify-between relative shrink-0">
               <button onClick={() => setShowStatusMenu(!showStatusMenu)} className="flex items-center gap-2 p-1 rounded hover:bg-[#35373C]/50 min-w-0 flex-1 text-left">
-                <UserAvatar profile={userProfile} size="sm" showStatus accentHex={currentAccentHex} speaking={micLevel > 15 && !isMicMuted} />
+                <UserAvatar profile={userProfile} size="sm" showStatus accentHex={currentAccentHex} />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-bold text-white truncate">{userProfile.displayName}</div>
                   <div className="text-[11px] text-[#949BA4] truncate">#{userProfile.tag}</div>
                 </div>
               </button>
 
-              {showStatusMenu && (
-                <div className="absolute bottom-14 left-2 w-52 bg-[#111214] border border-[#1E1F22] rounded-md shadow-2xl p-1.5 z-50">
-                  {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                    <button
-                      key={key}
-                      onClick={async () => { setShowStatusMenu(false); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), { status: key }); }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded text-left hover:bg-[#35373C]"
-                    >
-                      <span className={`w-2.5 h-2.5 rounded-full ${cfg.dotColor}`} />
-                      <span className="text-xs font-medium text-[#DBDEE1]">{cfg.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <div className="flex items-center">
-                <button onClick={handleToggleMic} className={`p-1.5 rounded hover:bg-[#35373C]/50 ${isMicMuted ? 'text-[#F23F43]' : 'text-[#B5BAC1] hover:text-white'}`}>
-                  <LucideIcon name={isMicMuted ? "MicOff" : "Mic"} className="w-4 h-4" />
-                </button>
-                <button onClick={() => setIsDeafened(!isDeafened)} className={`p-1.5 rounded hover:bg-[#35373C]/50 ${isDeafened ? 'text-[#F23F43]' : 'text-[#B5BAC1] hover:text-white'}`}>
-                  <LucideIcon name={isDeafened ? "HeadphoneOff" : "Headphones"} className="w-4 h-4" />
-                </button>
                 <button onClick={() => { setSettingsTab('profile'); setShowSettingsModal(true); }} className="p-1.5 rounded hover:bg-[#35373C]/50 text-[#B5BAC1] hover:text-white">
                   <LucideIcon name="Settings" className="w-4 h-4" />
                 </button>
@@ -1292,7 +857,7 @@
             </div>
           </aside>
 
-          {/* 3. ÁREA PRINCIPAL */}
+          {/* ÁREA PRINCIPAL */}
           <main className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: activeTheme.bgChat }}>
             <header className="h-12 px-4 border-b border-black/25 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -1314,7 +879,6 @@
                       </div>
                       <button onClick={() => setHomeTab('online')} className={`px-2 py-1 rounded text-xs font-medium ${homeTab === 'online' ? 'bg-[#404249] text-white' : 'text-[#B5BAC1] hover:text-white'}`}>Online</button>
                       <button onClick={() => setHomeTab('all')} className={`px-2 py-1 rounded text-xs font-medium ${homeTab === 'all' ? 'bg-[#404249] text-white' : 'text-[#B5BAC1] hover:text-white'}`}>Todos</button>
-                      <button onClick={() => setHomeTab('pending')} className={`px-2 py-1 rounded text-xs font-medium ${homeTab === 'pending' ? 'bg-[#404249] text-white' : 'text-[#B5BAC1] hover:text-white'}`}>Pendente ({incomingRequests.length})</button>
                       <button onClick={() => setHomeTab('add')} className="px-2.5 py-1 rounded text-xs font-medium text-white" style={{ backgroundColor: currentAccentHex }}>Adicionar amigo</button>
                     </div>
                   )
@@ -1326,46 +890,12 @@
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <button onClick={() => copyToClipboard(userProfile.fullHandle, `Usuário copiado: ${userProfile.fullHandle}`)} className="hidden sm:flex items-center gap-1.5 bg-[#1E1F22] hover:bg-[#2B2D31] px-2.5 py-1 rounded text-xs text-[#B5BAC1] hover:text-white">
-                  <span className="font-mono">{userProfile.fullHandle}</span>
-                  <LucideIcon name="Copy" className="w-3.5 h-3.5" />
-                </button>
-                {viewMode === 'home' && homeTab === 'dm' && activeFriend && (
-                  <>
-                    <button onClick={() => joinCallRoom(`dmcall_${getDmRoomId(user.uid, activeFriend.uid)}`, `Chamada com ${activeFriend.displayName}`, false)} className="p-1.5 rounded hover:bg-[#35373C]/40 text-[#B5BAC1] hover:text-white"><LucideIcon name="PhoneCall" className="w-5 h-5" /></button>
-                    <button onClick={() => joinCallRoom(`dmcall_${getDmRoomId(user.uid, activeFriend.uid)}`, `Vídeo com ${activeFriend.displayName}`, true)} className="p-1.5 rounded hover:bg-[#35373C]/40 text-[#B5BAC1] hover:text-white"><LucideIcon name="Video" className="w-5 h-5" /></button>
-                  </>
-                )}
-              </div>
+              <button onClick={() => copyToClipboard(userProfile.fullHandle, `Copiado: ${userProfile.fullHandle}`)} className="hidden sm:flex items-center gap-1.5 bg-[#1E1F22] hover:bg-[#2B2D31] px-2.5 py-1 rounded text-xs text-[#B5BAC1] hover:text-white">
+                <span className="font-mono">{userProfile.fullHandle}</span>
+                <LucideIcon name="Copy" className="w-3.5 h-3.5" />
+              </button>
             </header>
 
-            {/* ÁREA DE CHAMADA WEBRTC */}
-            {activeCallRoomId && (
-              <section className="bg-[#111214] border-b border-black/30 p-4 shrink-0">
-                <div className="max-w-4xl mx-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
-                    <div className={`relative aspect-video bg-[#1E1F22] rounded-lg overflow-hidden flex flex-col items-center justify-center border-2 ${micLevel > 15 && !isMicMuted ? 'border-[#23A55A]' : 'border-transparent'}`}>
-                      <video ref={localVideoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${isCamEnabled || isScreenSharing ? 'block' : 'hidden'}`} />
-                      {!isCamEnabled && !isScreenSharing && <UserAvatar profile={userProfile} size="lg" accentHex={currentAccentHex} speaking={micLevel > 15 && !isMicMuted} />}
-                      <div className="absolute bottom-2.5 left-2.5 bg-[#111214]/85 px-2.5 py-1 rounded text-xs font-semibold text-white">{userProfile.displayName} (Você)</div>
-                    </div>
-                    {remotePeerEntries.map(([uid, peer]) => (
-                      <RemotePeerCard key={uid} peerData={peer.profile} stream={peer.stream} isDeafened={isDeafened} accentHex={currentAccentHex} />
-                    ))}
-                  </div>
-                  {mediaError && <div className="mt-2 text-xs text-[#F0B232] bg-[#F0B232]/10 px-3 py-1.5 rounded">{mediaError}</div>}
-                  <div className="mt-3 flex items-center justify-center gap-3">
-                    <button onClick={handleToggleCamera} className={`p-3 rounded-full ${isCamEnabled ? 'bg-white text-[#111214]' : 'bg-[#2B2D31] text-white'}`}><LucideIcon name={isCamEnabled ? "Video" : "VideoOff"} className="w-5 h-5" /></button>
-                    <button onClick={handleToggleScreenShare} className={`p-3 rounded-full ${isScreenSharing ? 'bg-[#23A55A] text-white' : 'bg-[#2B2D31] text-white'}`}><LucideIcon name="Monitor" className="w-5 h-5" /></button>
-                    <button onClick={handleToggleMic} className={`p-3 rounded-full ${isMicMuted ? 'bg-white text-[#111214]' : 'bg-[#2B2D31] text-white'}`}><LucideIcon name={isMicMuted ? "MicOff" : "Mic"} className="w-5 h-5" /></button>
-                    <button onClick={leaveCallRoom} className="p-3 rounded-full bg-[#F23F43] text-white"><LucideIcon name="PhoneOff" className="w-5 h-5" /></button>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* FEED DE AMIGOS OU CHAT */}
             {viewMode === 'home' && homeTab !== 'dm' ? (
               <div className="flex-1 overflow-y-auto p-6">
                 {homeTab === 'add' && (
@@ -1377,24 +907,6 @@
                       <button type="submit" className="px-4 py-1.5 rounded text-white text-xs font-medium" style={{ backgroundColor: currentAccentHex }}>Enviar pedido</button>
                     </form>
                     {friendFeedback && <p className={`mt-2 text-xs ${friendFeedback.isError ? 'text-[#F23F43]' : 'text-[#23A55A]'}`}>{friendFeedback.text}</p>}
-                  </div>
-                )}
-
-                {homeTab === 'pending' && (
-                  <div className="max-w-2xl space-y-3">
-                    <h3 className="text-xs font-bold uppercase text-[#949BA4]">Pedidos Recebidos — {incomingRequests.length}</h3>
-                    {incomingRequests.map((req) => (
-                      <div key={req.id} className="py-3 flex items-center justify-between border-b border-[#3F4147]/40">
-                        <div>
-                          <div className="text-sm font-bold text-white">{req.fromName}</div>
-                          <div className="text-xs text-[#949BA4]">{req.fromHandle}</div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => handleAcceptRequest(req)} className="p-2 rounded-full bg-[#2B2D31] text-[#23A55A]"><LucideIcon name="UserCheck" className="w-5 h-5" /></button>
-                          <button onClick={() => handleDeclineRequest(req.id)} className="p-2 rounded-full bg-[#2B2D31] text-[#F23F43]"><LucideIcon name="UserX" className="w-5 h-5" /></button>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
 
@@ -1430,7 +942,6 @@
                             <span className="text-[11px] text-[#949BA4]">{formatTimestamp(msg.createdAt || msg.clientTimestamp)}</span>
                           </div>
                           {msg.text && <p className="text-sm text-[#DBDEE1] break-words">{msg.text}</p>}
-                          {msg.imageDataUrl && <img src={msg.imageDataUrl} alt="Mídia" className="mt-2 max-h-72 rounded-md object-contain" />}
                         </div>
                       </div>
                     );
@@ -1440,30 +951,8 @@
 
                 {/* BARRA DE INPUT DO CHAT */}
                 <div className="px-4 pb-5 pt-1 relative">
-                  {showGifPicker && (
-                    <div className="absolute bottom-16 left-4 right-4 bg-[#2B2D31] border border-black/30 rounded-lg p-3 shadow-2xl z-40">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase text-white">GIFs Grátis</span>
-                        <button onClick={() => setShowGifPicker(false)} className="text-[#B5BAC1]"><LucideIcon name="X" className="w-4 h-4" /></button>
-                      </div>
-                      <input type="text" value={gifSearchQuery} onChange={(e) => setGifSearchQuery(e.target.value)} placeholder="Pesquisar GIF..." className="w-full bg-[#1E1F22] rounded px-3 py-1.5 text-xs text-white outline-none mb-2" />
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                        {CURATED_GIFS.filter((g) => g.title.toLowerCase().includes(gifSearchQuery.toLowerCase())).map((gif) => (
-                          <button key={gif.id} onClick={() => handleSendMessage(null, gif.url)} className="rounded overflow-hidden aspect-video">
-                            <img src={gif.url} alt={gif.title} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   <form onSubmit={handleSendMessage} className="rounded-lg px-4 py-2.5 flex items-center gap-3" style={{ backgroundColor: activeTheme.bgInput }}>
-                    <input ref={chatFileInputRef} type="file" accept="image/*" onChange={handleChatImageUploadFromPC} className="hidden" />
-                    <button type="button" onClick={() => chatFileInputRef.current?.click()} className="w-6 h-6 rounded-full bg-[#B5BAC1] text-[#313338] flex items-center justify-center">
-                      <LucideIcon name="Plus" className="w-4 h-4" />
-                    </button>
                     <input type="text" value={messageInput} onChange={(e) => setMessageInput(e.target.value)} placeholder="Conversar no Doors.cord..." className="flex-1 bg-transparent text-sm text-white outline-none" />
-                    <button type="button" onClick={() => setShowGifPicker(!showGifPicker)} className="px-2 py-1 rounded bg-[#2B2D31] text-xs font-bold text-[#B5BAC1] hover:text-white">GIF</button>
                     <button type="submit" className="text-[#B5BAC1] hover:text-white"><LucideIcon name="Send" className="w-5 h-5" /></button>
                   </form>
                 </div>
@@ -1471,50 +960,17 @@
             )}
           </main>
 
-          {/* MODAL DE CONFIGURAÇÕES & TEMAS */}
+          {/* MODAL DE CONFIGURAÇÕES */}
           {showSettingsModal && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
               <div className="bg-[#313338] w-full max-w-2xl rounded-lg overflow-hidden shadow-2xl flex h-[480px]">
                 <div className="w-44 bg-[#2B2D31] p-3 flex flex-col gap-1">
                   <button onClick={() => setSettingsTab('profile')} className={`text-left px-2.5 py-2 rounded text-sm ${settingsTab === 'profile' ? 'bg-[#404249] text-white' : 'text-[#949BA4]'}`}>Meu Perfil</button>
                   <button onClick={() => setSettingsTab('appearance')} className={`text-left px-2.5 py-2 rounded text-sm ${settingsTab === 'appearance' ? 'bg-[#404249] text-white' : 'text-[#949BA4]'}`}>Temas & Cores</button>
-                  <button onClick={() => setSettingsTab('server_config')} className={`text-left px-2.5 py-2 rounded text-sm ${settingsTab === 'server_config' ? 'bg-[#404249] text-white' : 'text-[#949BA4]'}`}>Servidor Online</button>
                   <button onClick={() => setShowSettingsModal(false)} className="mt-auto text-left px-2.5 py-2 rounded text-sm text-[#F23F43]">Fechar</button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
-                  {settingsTab === 'server_config' && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-bold text-white">Conectar Banco Online (GitHub Pages)</h3>
-                      <p className="text-xs text-[#B5BAC1] leading-relaxed">
-                        Para conversar e entrar em chamadas de voz com amigos em outros computadores pelo seu link do GitHub Pages, crie um projeto gratuito no <strong>console.firebase.google.com</strong> (ative Authentication Anônimo e Firestore Database) e cole o objeto <code className="text-white">firebaseConfig</code> abaixo:
-                      </p>
-                      <textarea
-                        rows={6}
-                        value={customFbJson}
-                        onChange={(e) => setCustomFbJson(e.target.value)}
-                        placeholder={'{\n  "apiKey": "AIzaSy...",\n  "authDomain": "seu-app.firebaseapp.com",\n  "projectId": "seu-app",\n  "storageBucket": "seu-app.appspot.com",\n  "messagingSenderId": "123456",\n  "appId": "1:123456:web:abc"\n}'}
-                        className="w-full bg-[#1E1F22] rounded p-3 text-xs font-mono text-white outline-none border border-[#3F4147]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          try {
-                            const parsed = JSON.parse(customFbJson);
-                            if (!parsed.apiKey || !parsed.projectId) throw new Error('JSON inválido');
-                            window.name = 'DOORSCORD_FB_' + JSON.stringify(parsed);
-                            window.location.reload();
-                          } catch (err) {
-                            showToast('Cole um JSON firebaseConfig válido com apiKey e projectId.', true);
-                          }
-                        }}
-                        className="px-5 py-2 rounded text-white text-xs font-medium"
-                        style={{ backgroundColor: currentAccentHex }}
-                      >
-                        Conectar e Reiniciar
-                      </button>
-                    </div>
-                  )}
                   {settingsTab === 'profile' && (
                     <form onSubmit={handleSaveProfile} className="space-y-4">
                       <h3 className="text-lg font-bold text-white">Perfil do Usuário</h3>
@@ -1558,35 +1014,11 @@
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
               <div className="bg-[#313338] w-full max-w-md rounded-lg p-6">
                 <div className="flex justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">Servidor</h3>
+                  <h3 className="text-lg font-bold text-white">Criar Servidor</h3>
                   <button onClick={() => setShowServerModal(false)}><LucideIcon name="X" className="w-5 h-5" /></button>
                 </div>
-                <div className="flex gap-2 mb-4 bg-[#1E1F22] p-1 rounded">
-                  <button onClick={() => setServerModalTab('create')} className="flex-1 py-1.5 rounded text-xs font-semibold text-white" style={{ backgroundColor: serverModalTab === 'create' ? currentAccentHex : undefined }}>Criar</button>
-                  <button onClick={() => setServerModalTab('join')} className="flex-1 py-1.5 rounded text-xs font-semibold text-white" style={{ backgroundColor: serverModalTab === 'join' ? currentAccentHex : undefined }}>Convidar</button>
-                </div>
-                {serverModalTab === 'create' ? (
-                  <form onSubmit={handleCreateServer} className="space-y-4">
-                    <input type="text" required value={newServerName} onChange={(e) => setNewServerName(e.target.value)} placeholder="Nome do Servidor" className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none" />
-                    <button type="submit" className="w-full py-2.5 rounded text-white text-sm font-medium" style={{ backgroundColor: currentAccentHex }}>Criar</button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleJoinServer} className="space-y-4">
-                    <input type="text" required value={joinInviteCode} onChange={(e) => setJoinInviteCode(e.target.value)} placeholder="Código DC-XXXXXX" className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white font-mono uppercase outline-none" />
-                    <button type="submit" className="w-full py-2.5 rounded text-white text-sm font-medium" style={{ backgroundColor: currentAccentHex }}>Entrar</button>
-                  </form>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* MODAL CANAL */}
-          {showChannelModal && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-              <div className="bg-[#313338] w-full max-w-md rounded-lg p-6">
-                <h3 className="text-lg font-bold text-white mb-4">Criar Canal</h3>
-                <form onSubmit={handleCreateChannel} className="space-y-4">
-                  <input type="text" required value={newChannelName} onChange={(e) => setNewChannelName(e.target.value)} placeholder="nome-do-canal" className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none" />
+                <form onSubmit={handleCreateServer} className="space-y-4">
+                  <input type="text" required value={newServerName} onChange={(e) => setNewServerName(e.target.value)} placeholder="Nome do Servidor" className="w-full bg-[#1E1F22] rounded px-3 py-2.5 text-sm text-white outline-none" />
                   <button type="submit" className="w-full py-2.5 rounded text-white text-sm font-medium" style={{ backgroundColor: currentAccentHex }}>Criar</button>
                 </form>
               </div>
@@ -1596,22 +1028,13 @@
       );
     }
 
-    // Bootstrap após o módulo ES do Firebase carregar
-    function startDoorsCord() {
+    window.startDoorsCordApp = function() {
       const sdk = window.FirebaseSDK;
       if (!sdk) return;
 
-      let customConfig = null;
-      if (typeof window.name === 'string' && window.name.startsWith('DOORSCORD_FB_')) {
-        try {
-          customConfig = JSON.parse(window.name.replace('DOORSCORD_FB_', ''));
-        } catch (e) {}
-      }
-
-      const isConfigured = typeof __firebase_config !== 'undefined' || Boolean(customConfig);
       const firebaseConfig = typeof __firebase_config !== 'undefined'
         ? JSON.parse(__firebase_config)
-        : customConfig || {
+        : {
             apiKey: "demo-key",
             authDomain: "demo.firebaseapp.com",
             projectId: "demo-project",
@@ -1626,13 +1049,11 @@
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'doorscord-realtime-br-v2';
 
       const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(<App fb={{ ...sdk, auth, db, appId, isConfigured }} />);
-    }
+      root.render(<App fb={{ ...sdk, auth, db, appId, isConfigured: Boolean(window.__firebaseLoaded) }} />);
+    };
 
-    if (window.FirebaseSDK) {
-      startDoorsCord();
-    } else {
-      window.addEventListener('firebase-ready', startDoorsCord);
+    if (window.__firebaseLoaded) {
+      window.startDoorsCordApp();
     }
   </script>
 </body>
