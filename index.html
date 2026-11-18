@@ -402,48 +402,52 @@
       const [accountEmail, setAccountEmail] = useState('');
       const [accountPassword, setAccountPassword] = useState('');
       const [accountIsSignUp, setAccountIsSignUp] = useState(true);
+      const [customFbJson, setCustomFbJson] = useState('');
 
       const [editDisplayName, setEditDisplayName] = useState('');
-      const [editUsername, setEditUsername] = useState('');
-      const [editBio, setEditBio] = useState('');
-      const [editAvatarDataUrl, setEditAvatarDataUrl] = useState('');
-      const [editAvatarColor, setEditAvatarColor] = useState(AVATAR_COLORS[0]);
-      const [editBannerColor, setEditBannerColor] = useState(BANNER_COLORS[0]);
-      const [uploadingAvatar, setUploadingAvatar] = useState(false);
-      const avatarFileInputRef = useRef(null);
-
-      const [activeCallRoomId, setActiveCallRoomId] = useState(null);
-      const [activeCallTitle, setActiveCallTitle] = useState('');
-      const [isMicMuted, setIsMicMuted] = useState(false);
-      const [isDeafened, setIsDeafened] = useState(false);
-      const [isCamEnabled, setIsCamEnabled] = useState(false);
-      const [isScreenSharing, setIsScreenSharing] = useState(false);
-      const [micLevel, setMicLevel] = useState(0);
-      const [mediaError, setMediaError] = useState(null);
-      const [remotePeers, setRemotePeers] = useState({});
-      const [audioDevices, setAudioDevices] = useState([]);
-      const [videoDevices, setVideoDevices] = useState([]);
-      const [selectedAudioId, setSelectedAudioId] = useState('');
-      const [selectedVideoId, setSelectedVideoId] = useState('');
-
-      const localAudioStreamRef = useRef(null);
-      const localVideoStreamRef = useRef(null);
-      const localVideoRef = useRef(null);
-      const peerConnectionsRef = useRef({});
-      const audioTransceiversRef = useRef({});
-      const videoTransceiversRef = useRef({});
-      const pendingCandidatesRef = useRef({});
-      const audioContextRef = useRef(null);
-      const analyserTimerRef = useRef(null);
-
-      const [toast, setToast] = useState(null);
-      const showToast = (msg, isError = false) => {
-        setToast({ msg, isError });
-        setTimeout(() => setToast(null), 3500);
-      };
-
-      // Inicializar Autenticação Firebase
+      // Inicializar Autenticação Firebase (com fallback instantâneo para GitHub Pages)
       useEffect(() => {
+        const isDemoConfig = !fb.isConfigured;
+
+        const createLocalFallbackUser = () => {
+          const fallbackUid = 'user_' + Math.random().toString(36).slice(2, 10);
+          const tag = generateTag(fallbackUid);
+          const baseName = `usuario_${fallbackUid.slice(5, 9)}`;
+          const fallbackProf = {
+            uid: fallbackUid,
+            displayName: `Usuário ${tag}`,
+            username: baseName,
+            tag,
+            fullHandle: `${baseName}#${tag}`,
+            bio: 'Online no Doors.cord',
+            avatarDataUrl: '',
+            avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+            bannerColor: BANNER_COLORS[0],
+            status: 'online',
+            theme: 'classic',
+            accentHex: '#5865F2',
+            friends: [],
+            createdAt: Date.now()
+          };
+          setUser({ uid: fallbackUid, isFallback: true });
+          setUserProfile(fallbackProf);
+          setAllUsers([fallbackProf]);
+          setEditDisplayName(fallbackProf.displayName);
+          setEditUsername(fallbackProf.username);
+          setAuthLoading(false);
+        };
+
+        if (isDemoConfig) {
+          createLocalFallbackUser();
+          return;
+        }
+
+        const timeoutId = setTimeout(() => {
+          if (!auth.currentUser) {
+            createLocalFallbackUser();
+          }
+        }, 4000);
+
         const initAuth = async () => {
           try {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -452,21 +456,28 @@
               await signInAnonymously(auth);
             }
           } catch (err) {
-            console.error('Auth error:', err);
+            console.error('Auth error, usando modo local:', err);
+            createLocalFallbackUser();
           }
         };
         initAuth();
 
         const unsub = onAuthStateChanged(auth, (curr) => {
-          setUser(curr);
-          setAuthLoading(false);
+          if (curr) {
+            clearTimeout(timeoutId);
+            setUser(curr);
+            setAuthLoading(false);
+          }
         });
-        return () => unsub();
+        return () => {
+          clearTimeout(timeoutId);
+          unsub();
+        };
       }, []);
 
       // Sincronizar Perfil do Usuário
       useEffect(() => {
-        if (!user) return;
+        if (!user || user.isFallback) return;
         const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid);
         const unsubProf = onSnapshot(userRef, async (snap) => {
           if (snap.exists()) {
@@ -508,7 +519,7 @@
 
       // Coleções Globais
       useEffect(() => {
-        if (!user) return;
+        if (!user || user.isFallback) return;
         const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (s) =>
           setAllUsers(s.docs.map((d) => ({ id: d.id, ...d.data() })))
         );
@@ -532,7 +543,7 @@
       }, [viewMode, homeTab, user, activeFriendUid, activeChannelId]);
 
       useEffect(() => {
-        if (!user || !currentRoomId) { setMessages([]); return; }
+        if (!user || user.isFallback || !currentRoomId) { setMessages([]); return; }
         const unsubMsgs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), (s) => {
           const list = s.docs
             .map((d) => ({ id: d.id, ...d.data() }))
@@ -876,7 +887,7 @@
         if (e) e.preventDefault();
         if (!user || !userProfile || !editDisplayName.trim()) return;
         const cleanUser = editUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || userProfile.username;
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), {
+        const updatedFields = {
           displayName: editDisplayName.trim(),
           username: cleanUser,
           fullHandle: `${cleanUser}#${userProfile.tag}`,
@@ -886,7 +897,18 @@
           bannerColor: editBannerColor,
           theme: currentThemeKey,
           accentHex: currentAccentHex
-        });
+        };
+
+        if (user.isFallback) {
+          const nextProf = { ...userProfile, ...updatedFields };
+          setUserProfile(nextProf);
+          setAllUsers((prev) => prev.map((u) => (u.uid === user.uid ? nextProf : u)));
+          setShowSettingsModal(false);
+          showToast('Perfil e tema salvos!');
+          return;
+        }
+
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.uid), updatedFields);
         setShowSettingsModal(false);
         showToast('Perfil e tema salvos!');
       };
@@ -923,6 +945,26 @@
         e.preventDefault();
         if (!user || !newServerName.trim()) return;
         const inviteCode = generateInviteCode();
+
+        if (user.isFallback) {
+          const srvId = 'srv_' + Date.now();
+          const textChId = 'ch_' + Date.now();
+          const voiceChId = 'ch_' + (Date.now() + 1);
+          setServers((prev) => [...prev, { id: srvId, name: newServerName.trim(), ownerId: user.uid, inviteCode, members: [user.uid], createdAt: Date.now() }]);
+          setChannels((prev) => [
+            ...prev,
+            { id: textChId, serverId: srvId, name: 'geral', type: 'text', createdAt: Date.now() },
+            { id: voiceChId, serverId: srvId, name: 'Geral', type: 'voice', createdAt: Date.now() + 1 }
+          ]);
+          setActiveServerId(srvId);
+          setActiveChannelId(textChId);
+          setViewMode('server');
+          setNewServerName('');
+          setShowServerModal(false);
+          showToast(`Servidor criado! Convite: ${inviteCode}`);
+          return;
+        }
+
         const srvRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'servers'), {
           name: newServerName.trim(), ownerId: user.uid, inviteCode, members: [user.uid], createdAt: Date.now()
         });
@@ -963,6 +1005,17 @@
         e.preventDefault();
         if (!user || !activeServerId || !newChannelName.trim()) return;
         const formatted = newChannelType === 'text' ? newChannelName.trim().toLowerCase().replace(/\s+/g, '-') : newChannelName.trim();
+
+        if (user.isFallback) {
+          const chId = 'ch_' + Date.now();
+          setChannels((prev) => [...prev, { id: chId, serverId: activeServerId, name: formatted, type: newChannelType, createdAt: Date.now() }]);
+          setActiveChannelId(chId);
+          if (newChannelType === 'voice') joinCallRoom(`ch_${chId}`, formatted, false);
+          setNewChannelName('');
+          setShowChannelModal(false);
+          return;
+        }
+
         const chRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'channels'), {
           serverId: activeServerId, name: formatted, type: newChannelType, createdAt: Date.now()
         });
@@ -982,6 +1035,23 @@
         setMessageInput('');
         setAttachedImageDataUrl('');
         setShowGifPicker(false);
+
+        if (user.isFallback) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: 'msg_' + Date.now(),
+              roomId: currentRoomId,
+              senderId: user.uid,
+              text,
+              imageDataUrl: imgData,
+              reactions: {},
+              edited: false,
+              clientTimestamp: Date.now()
+            }
+          ]);
+          return;
+        }
 
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
           roomId: currentRoomId, senderId: user.uid, text, imageDataUrl: imgData,
@@ -1408,10 +1478,43 @@
                 <div className="w-44 bg-[#2B2D31] p-3 flex flex-col gap-1">
                   <button onClick={() => setSettingsTab('profile')} className={`text-left px-2.5 py-2 rounded text-sm ${settingsTab === 'profile' ? 'bg-[#404249] text-white' : 'text-[#949BA4]'}`}>Meu Perfil</button>
                   <button onClick={() => setSettingsTab('appearance')} className={`text-left px-2.5 py-2 rounded text-sm ${settingsTab === 'appearance' ? 'bg-[#404249] text-white' : 'text-[#949BA4]'}`}>Temas & Cores</button>
+                  <button onClick={() => setSettingsTab('server_config')} className={`text-left px-2.5 py-2 rounded text-sm ${settingsTab === 'server_config' ? 'bg-[#404249] text-white' : 'text-[#949BA4]'}`}>Servidor Online</button>
                   <button onClick={() => setShowSettingsModal(false)} className="mt-auto text-left px-2.5 py-2 rounded text-sm text-[#F23F43]">Fechar</button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
+                  {settingsTab === 'server_config' && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-white">Conectar Banco Online (GitHub Pages)</h3>
+                      <p className="text-xs text-[#B5BAC1] leading-relaxed">
+                        Para conversar e entrar em chamadas de voz com amigos em outros computadores pelo seu link do GitHub Pages, crie um projeto gratuito no <strong>console.firebase.google.com</strong> (ative Authentication Anônimo e Firestore Database) e cole o objeto <code className="text-white">firebaseConfig</code> abaixo:
+                      </p>
+                      <textarea
+                        rows={6}
+                        value={customFbJson}
+                        onChange={(e) => setCustomFbJson(e.target.value)}
+                        placeholder={'{\n  "apiKey": "AIzaSy...",\n  "authDomain": "seu-app.firebaseapp.com",\n  "projectId": "seu-app",\n  "storageBucket": "seu-app.appspot.com",\n  "messagingSenderId": "123456",\n  "appId": "1:123456:web:abc"\n}'}
+                        className="w-full bg-[#1E1F22] rounded p-3 text-xs font-mono text-white outline-none border border-[#3F4147]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            const parsed = JSON.parse(customFbJson);
+                            if (!parsed.apiKey || !parsed.projectId) throw new Error('JSON inválido');
+                            window.name = 'DOORSCORD_FB_' + JSON.stringify(parsed);
+                            window.location.reload();
+                          } catch (err) {
+                            showToast('Cole um JSON firebaseConfig válido com apiKey e projectId.', true);
+                          }
+                        }}
+                        className="px-5 py-2 rounded text-white text-xs font-medium"
+                        style={{ backgroundColor: currentAccentHex }}
+                      >
+                        Conectar e Reiniciar
+                      </button>
+                    </div>
+                  )}
                   {settingsTab === 'profile' && (
                     <form onSubmit={handleSaveProfile} className="space-y-4">
                       <h3 className="text-lg font-bold text-white">Perfil do Usuário</h3>
@@ -1498,9 +1601,17 @@
       const sdk = window.FirebaseSDK;
       if (!sdk) return;
 
+      let customConfig = null;
+      if (typeof window.name === 'string' && window.name.startsWith('DOORSCORD_FB_')) {
+        try {
+          customConfig = JSON.parse(window.name.replace('DOORSCORD_FB_', ''));
+        } catch (e) {}
+      }
+
+      const isConfigured = typeof __firebase_config !== 'undefined' || Boolean(customConfig);
       const firebaseConfig = typeof __firebase_config !== 'undefined'
         ? JSON.parse(__firebase_config)
-        : {
+        : customConfig || {
             apiKey: "demo-key",
             authDomain: "demo.firebaseapp.com",
             projectId: "demo-project",
@@ -1515,7 +1626,7 @@
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'doorscord-realtime-br-v2';
 
       const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(<App fb={{ ...sdk, auth, db, appId }} />);
+      root.render(<App fb={{ ...sdk, auth, db, appId, isConfigured }} />);
     }
 
     if (window.FirebaseSDK) {
